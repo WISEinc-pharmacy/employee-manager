@@ -456,11 +456,14 @@ function openModal(id) {
       <div class="form-grid">
         <div class="form-group"><label>氏名 *</label><input type="text" id="f_name" value="${esc(e.name)}"></div>
         <div class="form-group"><label>フリガナ</label><input type="text" id="f_kana" value="${esc(e.kana)}"></div>
+        <div class="form-group"><label>メールアドレス</label><input type="email" id="f_email" value="${esc(e.email)}"></div>
+        <div class="form-group"><label>Slack ID</label><input type="text" id="f_slackId" value="${esc(e.slackId)}" placeholder="U0XXXXXXXXX"></div>
         <div class="form-group"><label>店舗</label><select id="f_store">${storeOptions(e.store)}</select></div>
         <div class="form-group"><label>職種</label><select id="f_jobType"><option value="">-</option><option ${e.jobType==='薬剤師'?'selected':''}>薬剤師</option><option ${e.jobType==='事務'?'selected':''}>事務</option><option ${e.jobType==='管理栄養士'?'selected':''}>管理栄養士</option></select></div>
         <div class="form-group"><label>雇用形態</label><select id="f_employmentType"><option value="">-</option><option ${e.employmentType==='正社員'?'selected':''}>正社員</option><option ${e.employmentType==='有期'?'selected':''}>有期</option><option ${e.employmentType==='パート'?'selected':''}>パート</option></select></div>
         <div class="form-group"><label>役職</label><input type="text" id="f_position" value="${esc(e.position)}"></div>
         <div class="form-group"><label>入社日</label><input type="date" id="f_hireDate" value="${e.hireDate || ''}"></div>
+        <div class="form-group"><label>退職日</label><input type="date" id="f_leaveDate" value="${e.leaveDate || ''}"></div>
         <div class="form-group"><label>ステータス</label><select id="f_status"><option ${(e.status||'在籍')==='在籍'?'selected':''}>在籍</option><option ${e.status==='休職'?'selected':''}>休職</option><option ${e.status==='退職'?'selected':''}>退職</option></select></div>
       </div>
     </div>
@@ -570,7 +573,7 @@ function toggleCheckbox(el) {
 }
 
 function storeOptions(current) {
-  const stores = ['', '足立', '柏', 'さくら台', 'ながれやま', '我孫子', 'アイ調剤', '本社'];
+  const stores = ['', '足立', '柏', 'さくら台', 'ながれやま', '我孫子', 'アイ調剤', '越谷', '清瀬', '本社'];
   return stores.map(s => `<option value="${s}" ${current === s ? 'selected' : ''}>${s || '-'}</option>`).join('');
 }
 
@@ -578,9 +581,10 @@ function getFormData() {
   const g = id => document.getElementById(id)?.value || '';
   const cb = id => document.getElementById(id)?.checked ? '〇' : '';
   return {
-    name: g('f_name'), kana: g('f_kana'), store: g('f_store'),
+    name: g('f_name'), kana: g('f_kana'), email: g('f_email'), slackId: g('f_slackId'),
+    store: g('f_store'),
     jobType: g('f_jobType'), employmentType: g('f_employmentType'), position: g('f_position'),
-    hireDate: g('f_hireDate'), status: g('f_status'),
+    hireDate: g('f_hireDate'), leaveDate: g('f_leaveDate'), status: g('f_status'),
     conversionDate: g('f_conversionDate'), conversionCheckDate: g('f_conversionCheckDate'),
     careerUpDate: g('f_careerUpDate'), careerUpCheckDate: g('f_careerUpCheckDate'),
     pharmacist2yDate: g('f_pharmacist2yDate'), pharmacist2yCheckDate: g('f_pharmacist2yCheckDate'),
