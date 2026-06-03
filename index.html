@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>社員管理 - ワイズ株式会社</title>
+<style>
+:root {
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-surface: #ffffff;
+  --color-bg: #f1f5f9;
+  --color-text: #1e293b;
+  --color-text-sub: #64748b;
+  --color-border: #e2e8f0;
+  --color-success: #22c55e;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif; background: var(--color-bg); color: var(--color-text); font-size: 14px; }
+
+/* ===== ヘッダー ===== */
+.header { background: #1a5276; color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.header-right span { font-size: 13px; opacity: 0.9; }
+.btn { padding: 6px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-success { background: var(--color-success); color: #fff; }
+.btn-warn { background: var(--color-warn); color: #fff; }
+.btn-danger { background: var(--color-danger); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--color-border); color: var(--color-text); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ===== 認証画面 ===== */
+#authScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
+#authScreen h2 { font-size: 24px; }
+#authScreen p { color: var(--color-text-sub); }
+#loginBtn { padding: 12px 32px; font-size: 16px; }
+
+/* ===== タブ ===== */
+.tabs { display: flex; background: var(--color-surface); border-bottom: 2px solid var(--color-border); padding: 0 24px; }
+.tab { padding: 12px 24px; cursor: pointer; font-weight: 500; color: var(--color-text-sub); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.tab:hover { color: var(--color-text); }
+.tab-badge { background: var(--color-danger); color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 11px; margin-left: 6px; }
+
+/* ===== メインコンテンツ ===== */
+.container { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+.toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.toolbar input[type="text"] { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; width: 240px; }
+.toolbar select { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; }
+.toolbar .spacer { flex: 1; }
+
+/* ===== テーブル ===== */
+.table-wrap { overflow-x: auto; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: #2c3e50; color: #fff; padding: 10px 12px; text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-weight: 500; }
+tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+tbody tr:hover { background: #f0f7ff; }
+tbody tr.leave-active { background: #fef3c7; }
+.status-badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+.status-在籍 { background: #dcfce7; color: #166534; }
+.status-休職 { background: #fef3c7; color: #92400e; }
+.status-退職 { background: #fee2e2; color: #991b1b; }
+.clickable { cursor: pointer; color: var(--color-primary); text-decoration: underline; }
+.check-mark { color: var(--color-success); font-weight: bold; }
+.overdue { color: var(--color-danger); font-weight: bold; }
+.upcoming { color: var(--color-warn); font-weight: bold; }
+
+/* ===== モーダル ===== */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 40px; overflow-y: auto; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--color-surface); border-radius: var(--radius-lg); width: 90%; max-width: 800px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.modal-header { padding: 16px 24px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--color-surface); z-index: 1; }
+.modal-header h3 { font-size: 18px; }
+.modal-close { cursor: pointer; font-size: 24px; color: var(--color-text-sub); background: none; border: none; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 12px; position: sticky; bottom: 0; background: var(--color-surface); }
+
+/* ===== フォーム ===== */
+.form-section { margin-bottom: 24px; }
+.form-section h4 { font-size: 15px; font-weight: 600; color: var(--color-primary-dark); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid var(--color-primary); display: inline-block; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 12px; color: var(--color-text-sub); font-weight: 500; }
+.form-group input, .form-group select, .form-group textarea { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.form-group textarea { resize: vertical; min-height: 60px; }
+.form-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.form-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* ===== チェックボックス群 ===== */
+.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+.checkbox-item:hover { border-color: var(--color-primary); }
+.checkbox-item.checked { background: #eff6ff; border-color: var(--color-primary); }
+.checkbox-item input { display: none; }
+
+/* ===== リマインドカード ===== */
+.reminder-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.reminder-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 16px; border-left: 4px solid var(--color-warn); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.reminder-card.overdue { border-left-color: var(--color-danger); }
+.reminder-card .type { font-size: 12px; color: var(--color-text-sub); font-weight: 600; text-transform: uppercase; }
+.reminder-card .name { font-size: 16px; font-weight: 600; margin: 4px 0; }
+.reminder-card .detail { font-size: 13px; color: var(--color-text-sub); }
+.reminder-card .date { font-size: 14px; font-weight: 600; margin-top: 6px; }
+
+/* ===== 統計バー ===== */
+.stats-bar { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-width: 140px; }
+.stat-card .label { font-size: 12px; color: var(--color-text-sub); }
+.stat-card .value { font-size: 24px; font-weight: 700; color: var(--color-text); }
+
+/* ===== インポートモーダル ===== */
+.import-dropzone { border: 2px dashed var(--color-border); border-radius: var(--radius-md); padding: 40px; text-align: center; color: var(--color-text-sub); cursor: pointer; transition: all 0.2s; }
+.import-dropzone:hover, .import-dropzone.dragover { border-color: var(--color-primary); background: #f0f7ff; }
+.import-preview { margin-top: 16px; max-height: 300px; overflow-y: auto; }
+.import-preview table { font-size: 12px; }
+
+/* ===== ユーザー管理 ===== */
+.user-list { list-style: none; }
+.user-list li { padding: 10px 0; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 12px; }
+.user-list li:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<!-- ===== 認証画面 ===== -->
+<div id="authScreen">
+  <h2>社員管理</h2>
+  <p>ワイズ株式会社 社員情報管理ツール</p>
+  <button id="loginBtn" class="btn btn-primary" onclick="doLogin()">Googleでログイン</button>
+  <p id="authError" style="color:var(--color-danger);display:none;"></p>
+</div>
+
+<!-- ===== メイン画面 ===== -->
+<div id="mainScreen" style="display:none;">
+  <div class="header">
+    <h1>社員管理</h1>
+    <div class="header-right">
+      <span id="userInfo"></span>
+      <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="doLogout()">ログアウト</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="employees" onclick="switchTab('employees')">社員一覧</div>
+    <div class="tab" data-tab="reminders" onclick="switchTab('reminders')">リマインド <span id="reminderBadge" class="tab-badge" style="display:none;">0</span></div>
+    <div class="tab" data-tab="users" onclick="switchTab('users')">ユーザー管理</div>
+  </div>
+
+  <!-- ===== 社員一覧タブ ===== -->
+  <div id="tab-employees" class="container">
+    <div class="stats-bar" id="statsBar"></div>
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="名前・フリガナで検索..." oninput="renderTable()">
+      <select id="filterStore" onchange="renderTable()">
+        <option value="">全店舗</option>
+      </select>
+      <select id="filterStatus" onchange="renderTable()">
+        <option value="">全ステータス</option>
+        <option value="在籍" selected>在籍</option>
+        <option value="休職">休職</option>
+        <option value="退職">退職</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btnAdd" onclick="openModal()">+ 社員追加</button>
+      <button class="btn btn-warn" id="btnImport" onclick="openImportModal()">CSVインポート</button>
+      <button class="btn btn-outline" onclick="exportCSV()">CSVエクスポート</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>入社日</th>
+          <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>ステータス</th><th></th>
+        </tr></thead>
+        <tbody id="empTableBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;color:var(--color-text-sub);font-size:13px;" id="tableCount"></div>
+  </div>
+
+  <!-- ===== リマインドタブ ===== -->
+  <div id="tab-reminders" class="container" style="display:none;">
+    <div class="toolbar">
+      <select id="reminderFilter" onchange="renderReminders()">
+        <option value="">全種別</option>
+        <option value="転換確認">転換確認</option>
+        <option value="キャリアアップ確認">キャリアアップ確認</option>
+        <option value="薬剤師2年目確認">薬剤師2年目確認</option>
+        <option value="労働通知書期限">労働通知書期限</option>
+        <option value="免許証期限">免許証期限</option>
+        <option value="産休復帰">産休復帰</option>
+        <option value="育休復帰">育休復帰</option>
+        <option value="パパ育休復帰">パパ育休復帰</option>
+      </select>
+    </div>
+    <div class="reminder-cards" id="reminderCards"></div>
+    <div style="margin-top:12px;color:var(--color-text-sub);font-size:13px;" id="reminderCount"></div>
+  </div>
+
+  <!-- ===== ユーザー管理タブ ===== -->
+  <div id="tab-users" class="container" style="display:none;">
+    <div class="toolbar">
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btnAddUser" onclick="openUserModal()">+ ユーザー追加</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メールアドレス</th><th>名前</th><th>ロール</th><th>登録日</th><th></th></tr></thead>
+        <tbody id="userTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 社員編集モーダル ===== -->
+<div class="modal-overlay" id="empModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="empModalTitle">社員追加</h3>
+      <button class="modal-close" onclick="closeModal('empModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="empModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('empModal')">キャンセル</button>
+      <button class="btn btn-primary" id="btnSaveEmp" onclick="saveEmployee()">保存</button>
+      <button class="btn btn-danger btn-sm" id="btnDeleteEmp" style="display:none;" onclick="deleteEmployee()">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CSVインポートモーダル ===== -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>CSVインポート</h3>
+      <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:12px;color:var(--color-text-sub);">社員管理スプレッドシートのCSVをインポートします。ヘッダー行の列名で自動マッピングします。</p>
+      <div class="import-dropzone" id="dropzone" onclick="document.getElementById('csvFile').click()">
+        CSVファイルをドロップ、またはクリックして選択
+        <input type="file" id="csvFile" accept=".csv" style="display:none;" onchange="handleCSVFile(this.files[0])">
+      </div>
+      <div class="import-preview" id="importPreview" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('importModal')">キャンセル</button>
+      <button class="btn btn-primary" id="btnDoImport" style="display:none;" onclick="doImport()">インポート実行</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ユーザー追加モーダル ===== -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>ユーザー追加</h3>
+      <button class="modal-close" onclick="closeModal('userModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:12px;"><label>メールアドレス</label><input type="email" id="newUserEmail"></div>
+      <div class="form-group" style="margin-bottom:12px;"><label>名前</label><input type="text" id="newUserName"></div>
+      <div class="form-group"><label>ロール</label><select id="newUserRole"><option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('userModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addUser()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Firebase SDK ===== -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+// ===== 設定 =====
+const API_BASE = 'http://localhost:4001';
+const firebaseConfig = {
+  apiKey: "AIzaSyC1Yr7rBcBJ0ACbO6w9G8jt2S9kVZSIqiQ",
+  authDomain: "wise-patientdb.firebaseapp.com",
+  projectId: "wise-patientdb",
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+// ===== グローバル状態 =====
+let currentUser = null;
+let userRole = 'viewer';
+let employees = [];
+let reminders = [];
+let importRecords = [];
+let editingId = null;
+
+// ===== 認証 =====
+function doLogin() {
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e => {
+    document.getElementById('authError').textContent = e.message;
+    document.getElementById('authError').style.display = '';
+  });
+}
+function doLogout() { auth.signOut(); }
+
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('mainScreen').style.display = '';
+    try {
+      const me = await apiFetch('/api/users/me');
+      userRole = me.role;
+      document.getElementById('userInfo').textContent = `${me.name} (${me.role})`;
+      applyPermissions();
+      loadEmployees();
+      loadReminders();
+    } catch (e) {
+      alert('アクセス権がありません: ' + (e.message || e));
+      auth.signOut();
+    }
+  } else {
+    currentUser = null;
+    document.getElementById('authScreen').style.display = '';
+    document.getElementById('mainScreen').style.display = 'none';
+  }
+});
+
+async function apiFetch(path, options = {}) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...options.headers }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+function applyPermissions() {
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  document.getElementById('btnAdd').style.display = canEdit ? '' : 'none';
+  document.getElementById('btnImport').style.display = canEdit ? '' : 'none';
+  document.querySelectorAll('[data-tab="users"]').forEach(el => {
+    el.style.display = userRole === 'admin' ? '' : 'none';
+  });
+}
+
+// ===== タブ切り替え =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+  document.getElementById('tab-' + tab).style.display = '';
+  if (tab === 'users' && userRole === 'admin') loadUsers();
+}
+
+// ===== 社員データ =====
+async function loadEmployees() {
+  employees = await apiFetch('/api/employees');
+  populateFilters();
+  renderTable();
+  renderStats();
+}
+
+function populateFilters() {
+  const stores = [...new Set(employees.map(e => e.store).filter(Boolean))].sort();
+  const sel = document.getElementById('filterStore');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">全店舗</option>' + stores.map(s => `<option value="${s}">${s}</option>`).join('');
+  sel.value = current;
+}
+
+function renderStats() {
+  const active = employees.filter(e => e.status === '在籍');
+  const onLeave = employees.filter(e => e.status === '休職');
+  const stores = [...new Set(active.map(e => e.store).filter(Boolean))];
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card"><div class="label">在籍</div><div class="value">${active.length}</div></div>
+    <div class="stat-card"><div class="label">休職</div><div class="value">${onLeave.length}</div></div>
+    <div class="stat-card"><div class="label">店舗数</div><div class="value">${stores.length}</div></div>
+    <div class="stat-card"><div class="label">全登録</div><div class="value">${employees.length}</div></div>
+  `;
+}
+
+function renderTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const store = document.getElementById('filterStore').value;
+  const status = document.getElementById('filterStatus').value;
+
+  let filtered = employees;
+  if (store) filtered = filtered.filter(e => e.store === store);
+  if (status) filtered = filtered.filter(e => e.status === status);
+  if (search) filtered = filtered.filter(e =>
+    (e.name || '').toLowerCase().includes(search) || (e.kana || '').toLowerCase().includes(search)
+  );
+
+  const today = new Date().toISOString().slice(0, 10);
+  const tbody = document.getElementById('empTableBody');
+  tbody.innerHTML = filtered.map(e => {
+    const isOnLeave = e.maternityStart || e.childcareStart || e.paternityStart;
+    const convStatus = dateStatus(e.conversionCheckDate, today);
+    const lnStatus = dateStatus(e.laborNoticeExpiry, today);
+    const leaveText = getLeaveText(e);
+    return `<tr class="${isOnLeave && !e.maternityReturn && !e.childcareReturn ? 'leave-active' : ''}">
+      <td class="clickable" onclick="openModal('${e.id}')">${esc(e.name)}</td>
+      <td>${esc(e.kana)}</td>
+      <td>${esc(e.store)}</td>
+      <td>${esc(e.jobType)}</td>
+      <td>${esc(e.employmentType)}</td>
+      <td>${esc(e.hireDate)}</td>
+      <td class="${convStatus.cls}">${convStatus.text}</td>
+      <td class="${lnStatus.cls}">${lnStatus.text}</td>
+      <td>${leaveText}</td>
+      <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
+      <td>${userRole !== 'viewer' ? `<button class="btn btn-sm btn-outline" onclick="openModal('${e.id}')">編集</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tableCount').textContent = `${filtered.length}件表示 / 全${employees.length}件`;
+}
+
+function dateStatus(dateStr, today) {
+  if (!dateStr) return { text: '-', cls: '' };
+  if (dateStr < today) return { text: dateStr + ' (超過)', cls: 'overdue' };
+  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  if (dateStr <= in30) return { text: dateStr + ' (間近)', cls: 'upcoming' };
+  return { text: dateStr, cls: '' };
+}
+
+function getLeaveText(e) {
+  if (e.maternityStart && !e.maternityReturn) return '産休中';
+  if (e.childcareStart && !e.childcareReturn) return '育休中';
+  if (e.paternityStart && !e.paternityReturn) return 'パパ育休中';
+  if (e.dueDate) return '出産予定: ' + e.dueDate;
+  return '-';
+}
+
+function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ===== 社員モーダル =====
+function openModal(id) {
+  editingId = id || null;
+  const e = id ? employees.find(x => x.id === id) : {};
+  document.getElementById('empModalTitle').textContent = id ? '社員編集' : '社員追加';
+  document.getElementById('btnDeleteEmp').style.display = id && userRole === 'admin' ? '' : 'none';
+
+  const body = document.getElementById('empModalBody');
+  body.innerHTML = `
+    <div class="form-section">
+      <h4>基本情報</h4>
+      <div class="form-grid">
+        <div class="form-group"><label>氏名 *</label><input type="text" id="f_name" value="${esc(e.name)}"></div>
+        <div class="form-group"><label>フリガナ</label><input type="text" id="f_kana" value="${esc(e.kana)}"></div>
+        <div class="form-group"><label>店舗</label><select id="f_store">${storeOptions(e.store)}</select></div>
+        <div class="form-group"><label>職種</label><select id="f_jobType"><option value="">-</option><option ${e.jobType==='薬剤師'?'selected':''}>薬剤師</option><option ${e.jobType==='事務'?'selected':''}>事務</option><option ${e.jobType==='管理栄養士'?'selected':''}>管理栄養士</option></select></div>
+        <div class="form-group"><label>雇用形態</label><select id="f_employmentType"><option value="">-</option><option ${e.employmentType==='正社員'?'selected':''}>正社員</option><option ${e.employmentType==='有期'?'selected':''}>有期</option><option ${e.employmentType==='パート'?'selected':''}>パート</option></select></div>
+        <div class="form-group"><label>役職</label><input type="text" id="f_position" value="${esc(e.position)}"></div>
+        <div class="form-group"><label>入社日</label><input type="date" id="f_hireDate" value="${e.hireDate || ''}"></div>
+        <div class="form-group"><label>ステータス</label><select id="f_status"><option ${(e.status||'在籍')==='在籍'?'selected':''}>在籍</option><option ${e.status==='休職'?'selected':''}>休職</option><option ${e.status==='退職'?'selected':''}>退職</option></select></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>転換・リマインド</h4>
+      <div class="form-grid form-grid-3">
+        <div class="form-group"><label>転換日</label><input type="date" id="f_conversionDate" value="${e.conversionDate || ''}"></div>
+        <div class="form-group"><label>転換確認日</label><input type="date" id="f_conversionCheckDate" value="${e.conversionCheckDate || ''}"></div>
+        <div class="form-group"><label>キャリアアップ日</label><input type="date" id="f_careerUpDate" value="${e.careerUpDate || ''}"></div>
+        <div class="form-group"><label>キャリアアップ確認日</label><input type="date" id="f_careerUpCheckDate" value="${e.careerUpCheckDate || ''}"></div>
+        <div class="form-group"><label>薬剤師2年目転換日</label><input type="date" id="f_pharmacist2yDate" value="${e.pharmacist2yDate || ''}"></div>
+        <div class="form-group"><label>薬剤師2年目確認日</label><input type="date" id="f_pharmacist2yCheckDate" value="${e.pharmacist2yCheckDate || ''}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>産休・育休</h4>
+      <div class="form-grid form-grid-3">
+        <div class="form-group"><label>出産予定日</label><input type="date" id="f_dueDate" value="${e.dueDate || ''}"></div>
+        <div class="form-group"><label>産前産後 開始日</label><input type="date" id="f_maternityStart" value="${e.maternityStart || ''}"></div>
+        <div class="form-group"><label>産前産後 終了日</label><input type="date" id="f_maternityEnd" value="${e.maternityEnd || ''}"></div>
+        <div class="form-group"><label>産前産後 復帰日</label><input type="date" id="f_maternityReturn" value="${e.maternityReturn || ''}"></div>
+        <div class="form-group"><label>育児休業 開始日</label><input type="date" id="f_childcareStart" value="${e.childcareStart || ''}"></div>
+        <div class="form-group"><label>育児休業 終了日</label><input type="date" id="f_childcareEnd" value="${e.childcareEnd || ''}"></div>
+        <div class="form-group"><label>育児休業 復帰日</label><input type="date" id="f_childcareReturn" value="${e.childcareReturn || ''}"></div>
+        <div class="form-group"><label>パパ育休 開始日</label><input type="date" id="f_paternityStart" value="${e.paternityStart || ''}"></div>
+        <div class="form-group"><label>パパ育休 終了日</label><input type="date" id="f_paternityEnd" value="${e.paternityEnd || ''}"></div>
+        <div class="form-group"><label>パパ育休 復帰日</label><input type="date" id="f_paternityReturn" value="${e.paternityReturn || ''}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>労働通知書</h4>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label>最新の期限</label><input type="date" id="f_laborNoticeExpiry" value="${e.laborNoticeExpiry || ''}"></div>
+        <div class="form-group"><label>作成状態</label><input type="text" id="f_laborNoticeCreated" value="${esc(e.laborNoticeCreated)}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>中退共</h4>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label>一時停止</label><input type="text" id="f_retirementFundStatus" value="${esc(e.retirementFundStatus)}"></div>
+        <div class="form-group"><label>共済者番号(11桁)</label><input type="text" id="f_retirementFundNumber" value="${esc(e.retirementFundNumber)}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>資格・免許</h4>
+      <div class="form-grid form-grid-3">
+        <div class="form-group"><label>薬剤師免許証URL</label><input type="url" id="f_pharmacistLicenseUrl" value="${esc(e.pharmacistLicenseUrl)}"></div>
+        <div class="form-group"><label>薬剤師免許証番号</label><input type="text" id="f_pharmacistLicenseNo" value="${esc(e.pharmacistLicenseNo)}"></div>
+        <div class="form-group"><label>登録年月</label><input type="text" id="f_pharmacistLicenseDate" value="${esc(e.pharmacistLicenseDate)}"></div>
+        <div class="form-group"><label>保険薬剤師登録URL</label><input type="url" id="f_insurancePharmacistUrl" value="${esc(e.insurancePharmacistUrl)}"></div>
+        <div class="form-group"><label>保険薬剤師登録票番号</label><input type="text" id="f_insurancePharmacistNo" value="${esc(e.insurancePharmacistNo)}"></div>
+        <div class="form-group"><label>登録年月</label><input type="text" id="f_insurancePharmacistDate" value="${esc(e.insurancePharmacistDate)}"></div>
+        <div class="form-group"><label>免許証有効期限</label><input type="date" id="f_licenseExpiry" value="${e.licenseExpiry || ''}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>Driveリンク</h4>
+      <div class="form-grid">
+        <div class="form-group"><label>社員管理フォルダURL</label><input type="url" id="f_driveFolderUrl" value="${esc(e.driveFolderUrl)}" style="width:100%;"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>貸与物・アカウント</h4>
+      <div class="checkbox-grid">
+        ${renderCheckbox('hasTimesカー', 'f_hasTimes', e.hasTimes)}
+        ${renderCheckbox('KOT', 'f_hasKot', e.hasKot)}
+        ${renderCheckbox('ムスビ', 'f_hasMusubi', e.hasMusubi)}
+        ${renderCheckbox('チケットレストラン', 'f_hasTicketRestaurant', e.hasTicketRestaurant)}
+        ${renderCheckbox('店舗キー', 'f_hasStoreKey', e.hasStoreKey)}
+        ${renderCheckbox('名刺', 'f_hasNameCard', e.hasNameCard)}
+        ${renderCheckbox('携帯', 'f_hasPhone', e.hasPhone)}
+        ${renderCheckbox('印鑑', 'f_hasSeal', e.hasSeal)}
+        ${renderCheckbox('マイナンバー', 'f_hasMynumber', e.hasMynumber)}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h4>備考</h4>
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label>備考1</label><textarea id="f_note">${esc(e.note)}</textarea></div>
+        <div class="form-group"><label>備考2</label><textarea id="f_note2">${esc(e.note2)}</textarea></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('empModal').classList.add('show');
+}
+
+function renderCheckbox(label, id, value) {
+  const checked = value && value !== '' && value !== 'FALSE' && value !== '0' && value !== '-' && value !== 'ー';
+  return `<label class="checkbox-item ${checked ? 'checked' : ''}" onclick="toggleCheckbox(this)">
+    <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}>
+    <span>${label}</span>
+  </label>`;
+}
+
+function toggleCheckbox(el) {
+  const cb = el.querySelector('input');
+  cb.checked = !cb.checked;
+  el.classList.toggle('checked', cb.checked);
+}
+
+function storeOptions(current) {
+  const stores = ['', '足立', '柏', 'さくら台', 'ながれやま', '我孫子', 'アイ調剤', '本社'];
+  return stores.map(s => `<option value="${s}" ${current === s ? 'selected' : ''}>${s || '-'}</option>`).join('');
+}
+
+function getFormData() {
+  const g = id => document.getElementById(id)?.value || '';
+  const cb = id => document.getElementById(id)?.checked ? '〇' : '';
+  return {
+    name: g('f_name'), kana: g('f_kana'), store: g('f_store'),
+    jobType: g('f_jobType'), employmentType: g('f_employmentType'), position: g('f_position'),
+    hireDate: g('f_hireDate'), status: g('f_status'),
+    conversionDate: g('f_conversionDate'), conversionCheckDate: g('f_conversionCheckDate'),
+    careerUpDate: g('f_careerUpDate'), careerUpCheckDate: g('f_careerUpCheckDate'),
+    pharmacist2yDate: g('f_pharmacist2yDate'), pharmacist2yCheckDate: g('f_pharmacist2yCheckDate'),
+    dueDate: g('f_dueDate'),
+    maternityStart: g('f_maternityStart'), maternityEnd: g('f_maternityEnd'), maternityReturn: g('f_maternityReturn'),
+    childcareStart: g('f_childcareStart'), childcareEnd: g('f_childcareEnd'), childcareReturn: g('f_childcareReturn'),
+    paternityStart: g('f_paternityStart'), paternityEnd: g('f_paternityEnd'), paternityReturn: g('f_paternityReturn'),
+    maternityReminder: '', childcareReminder: '', paternityReminder: '',
+    laborNoticeExpiry: g('f_laborNoticeExpiry'), laborNoticeCreated: g('f_laborNoticeCreated'),
+    retirementFundStatus: g('f_retirementFundStatus'), retirementFundNumber: g('f_retirementFundNumber'),
+    pharmacistLicenseUrl: g('f_pharmacistLicenseUrl'), pharmacistLicenseNo: g('f_pharmacistLicenseNo'), pharmacistLicenseDate: g('f_pharmacistLicenseDate'),
+    insurancePharmacistUrl: g('f_insurancePharmacistUrl'), insurancePharmacistNo: g('f_insurancePharmacistNo'), insurancePharmacistDate: g('f_insurancePharmacistDate'),
+    licenseExpiry: g('f_licenseExpiry'), driveFolderUrl: g('f_driveFolderUrl'),
+    hasTimes: cb('f_hasTimes'), hasKot: cb('f_hasKot'), hasMusubi: cb('f_hasMusubi'),
+    hasTicketRestaurant: cb('f_hasTicketRestaurant'), hasStoreKey: cb('f_hasStoreKey'),
+    hasNameCard: cb('f_hasNameCard'), hasPhone: cb('f_hasPhone'), hasSeal: cb('f_hasSeal'), hasMynumber: cb('f_hasMynumber'),
+    note: g('f_note'), note2: g('f_note2'),
+  };
+}
+
+async function saveEmployee() {
+  const data = getFormData();
+  if (!data.name) return alert('氏名は必須です');
+  try {
+    if (editingId) {
+      await apiFetch('/api/employees/' + editingId, { method: 'PUT', body: JSON.stringify(data) });
+    } else {
+      await apiFetch('/api/employees', { method: 'POST', body: JSON.stringify(data) });
+    }
+    closeModal('empModal');
+    loadEmployees();
+    loadReminders();
+  } catch (e) {
+    alert('保存に失敗: ' + e.message);
+  }
+}
+
+async function deleteEmployee() {
+  if (!confirm('この社員を削除しますか？')) return;
+  try {
+    await apiFetch('/api/employees/' + editingId, { method: 'DELETE' });
+    closeModal('empModal');
+    loadEmployees();
+    loadReminders();
+  } catch (e) {
+    alert('削除に失敗: ' + e.message);
+  }
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// ===== リマインド =====
+async function loadReminders() {
+  try {
+    reminders = await apiFetch('/api/reminders');
+    const badge = document.getElementById('reminderBadge');
+    const overdue = reminders.filter(r => r.overdue).length;
+    badge.textContent = overdue;
+    badge.style.display = overdue > 0 ? '' : 'none';
+    renderReminders();
+  } catch (e) {
+    console.error('リマインド取得失敗:', e);
+  }
+}
+
+function renderReminders() {
+  const filter = document.getElementById('reminderFilter').value;
+  let list = reminders;
+  if (filter) list = list.filter(r => r.type === filter);
+
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('reminderCards').innerHTML = list.length === 0
+    ? '<p style="color:var(--color-text-sub);padding:20px;">リマインド項目はありません</p>'
+    : list.map(r => {
+      const daysLeft = Math.ceil((new Date(r.date) - new Date(today)) / 86400000);
+      const label = daysLeft < 0 ? `${Math.abs(daysLeft)}日超過` : daysLeft === 0 ? '本日' : `あと${daysLeft}日`;
+      return `<div class="reminder-card ${r.overdue ? 'overdue' : ''}">
+        <div class="type">${esc(r.type)}</div>
+        <div class="name clickable" onclick="openModal('${r.employeeId}')">${esc(r.name)}</div>
+        <div class="detail">${esc(r.store)}</div>
+        <div class="date ${r.overdue ? 'overdue' : 'upcoming'}">${r.date} (${label})</div>
+      </div>`;
+    }).join('');
+  document.getElementById('reminderCount').textContent = `${list.length}件`;
+}
+
+// ===== CSVインポート =====
+const CSV_COL_MAP = {
+  '氏名': 'name', 'フリガナ': 'kana', '職種': 'jobType', '雇用形態': 'employmentType',
+  '役職': 'position', '店舗': 'store', '店舗（メイン）': 'store', '入社日': 'hireDate',
+  '転換日': 'conversionDate', '転換確認日': 'conversionCheckDate',
+  'キャリアアップ': 'careerUpDate', 'キャリアアップ確認日': 'careerUpCheckDate',
+  '薬剤師２年目': 'pharmacist2yDate', '薬剤師２年目給与転換確認日': 'pharmacist2yCheckDate',
+  '出産予定日': 'dueDate',
+  '産前産後休業開始日': 'maternityStart', '産前産後休業終了日': 'maternityEnd', '産前産後休業復帰日': 'maternityReturn',
+  '育児休業開始日': 'childcareStart', '育児休業終了日': 'childcareEnd', '育児休業復帰日': 'childcareReturn',
+  '産後パパ育休開始日': 'paternityStart', '産後パパ育休終了日': 'paternityEnd', '産後パパ育休復帰日': 'paternityReturn',
+  '産前産後休業申請リマインド': 'maternityReminder', '育児休業申請リマインド': 'childcareReminder', '申請リマインド産後パパ育休': 'paternityReminder',
+  '最新の労働通知書の期限': 'laborNoticeExpiry', '労働通知書作成': 'laborNoticeCreated',
+  '中退共一時停止': 'retirementFundStatus', '共済者番号（11桁）': 'retirementFundNumber',
+  '薬剤師免許証URL': 'pharmacistLicenseUrl', '薬剤師免許証番号': 'pharmacistLicenseNo',
+  '保険薬剤師登録免許URL': 'insurancePharmacistUrl', '保険薬剤師登録票番号': 'insurancePharmacistNo',
+  '免許証有効期限': 'licenseExpiry',
+  '社員管理ドライブリンク': 'driveFolderUrl',
+  'タイムズ': 'hasTimes', 'KOT': 'hasKot', 'ムスビアカウント': 'hasMusubi',
+  'チケットレストラン': 'hasTicketRestaurant', '店舗キー': 'hasStoreKey',
+  '名刺': 'hasNameCard', '携帯': 'hasPhone', '印鑑': 'hasSeal', 'マイナンバー': 'hasMynumber',
+  '備考': 'note',
+};
+
+function openImportModal() {
+  importRecords = [];
+  document.getElementById('csvFile').value = '';
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('btnDoImport').style.display = 'none';
+  document.getElementById('importModal').classList.add('show');
+}
+
+// ドラッグ&ドロップ
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleCSVFile(e.dataTransfer.files[0]); });
+
+async function handleCSVFile(file) {
+  const buf = await file.arrayBuffer();
+  let text;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    text = new TextDecoder('shift-jis').decode(buf);
+  }
+
+  const rows = parseCSV(text);
+  if (rows.length < 2) return alert('データが空です');
+
+  const headers = rows[0].map(h => h.replace(/\n/g, '').trim());
+  const colMap = {};
+  headers.forEach((h, i) => {
+    // 改行含むヘッダーにも対応
+    const clean = h.replace(/\s+/g, '');
+    for (const [key, val] of Object.entries(CSV_COL_MAP)) {
+      if (clean.includes(key.replace(/\s+/g, ''))) { colMap[i] = val; break; }
+    }
+  });
+
+  importRecords = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row[headers.indexOf('氏名')] && !row[0]) continue; // skip empty
+    const rec = {};
+    for (const [i, field] of Object.entries(colMap)) {
+      let val = (row[parseInt(i)] || '').trim();
+      // 日付変換: 2016/06/01 → 2016-06-01
+      if (field.includes('Date') || field.includes('date') || field.includes('Start') || field.includes('End') || field.includes('Return') || field.includes('Expiry') || field === 'hireDate') {
+        val = val.replace(/\//g, '-');
+      }
+      rec[field] = val;
+    }
+    if (!rec.name) continue;
+
+    // 既存社員と照合
+    const match = employees.find(e => e.name === rec.name || (rec.kana && e.kana === rec.kana));
+    if (match) rec.existingId = match.id;
+    importRecords.push(rec);
+  }
+
+  // プレビュー
+  const preview = document.getElementById('importPreview');
+  const newCount = importRecords.filter(r => !r.existingId).length;
+  const updateCount = importRecords.filter(r => r.existingId).length;
+  preview.innerHTML = `
+    <p style="margin-bottom:8px;"><strong>${importRecords.length}件検出</strong>（新規: ${newCount}件, 更新: ${updateCount}件）</p>
+    <p style="margin-bottom:8px;color:var(--color-text-sub);">マッピング列: ${Object.values(colMap).join(', ')}</p>
+    <table><thead><tr><th>状態</th><th>氏名</th><th>店舗</th><th>入社日</th></tr></thead>
+    <tbody>${importRecords.slice(0, 20).map(r => `<tr>
+      <td>${r.existingId ? '更新' : '新規'}</td><td>${esc(r.name)}</td><td>${esc(r.store)}</td><td>${esc(r.hireDate)}</td>
+    </tr>`).join('')}${importRecords.length > 20 ? '<tr><td colspan="4">... 他' + (importRecords.length - 20) + '件</td></tr>' : ''}</tbody></table>
+  `;
+  preview.style.display = '';
+  document.getElementById('btnDoImport').style.display = '';
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuote) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') { inQuote = false; }
+      else { cell += c; }
+    } else {
+      if (c === '"') { inQuote = true; }
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
+        if (c === '\r') i++;
+        row.push(cell); cell = '';
+        rows.push(row); row = [];
+      } else { cell += c; }
+    }
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+async function doImport() {
+  if (importRecords.length === 0) return;
+  try {
+    document.getElementById('btnDoImport').textContent = 'インポート中...';
+    document.getElementById('btnDoImport').disabled = true;
+    const result = await apiFetch('/api/employees/import', {
+      method: 'POST', body: JSON.stringify({ records: importRecords })
+    });
+    alert(`インポート完了: 新規 ${result.added}件, 更新 ${result.updated}件`);
+    closeModal('importModal');
+    loadEmployees();
+    loadReminders();
+  } catch (e) {
+    alert('インポート失敗: ' + e.message);
+  } finally {
+    document.getElementById('btnDoImport').textContent = 'インポート実行';
+    document.getElementById('btnDoImport').disabled = false;
+  }
+}
+
+// ===== CSVエクスポート =====
+function exportCSV() {
+  const headers = ['氏名','フリガナ','店舗','職種','雇用形態','役職','入社日','ステータス',
+    '転換日','転換確認日','キャリアアップ日','キャリアアップ確認日','薬剤師2年目日','薬剤師2年目確認日',
+    '出産予定日','産前産後開始','産前産後終了','産前産後復帰','育休開始','育休終了','育休復帰',
+    'パパ育休開始','パパ育休終了','パパ育休復帰',
+    '労働通知書期限','労働通知書作成','中退共','共済者番号',
+    '薬剤師免許証番号','保険薬剤師登録番号','免許証有効期限',
+    'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯','印鑑','マイナンバー','備考'];
+  const fields = ['name','kana','store','jobType','employmentType','position','hireDate','status',
+    'conversionDate','conversionCheckDate','careerUpDate','careerUpCheckDate','pharmacist2yDate','pharmacist2yCheckDate',
+    'dueDate','maternityStart','maternityEnd','maternityReturn','childcareStart','childcareEnd','childcareReturn',
+    'paternityStart','paternityEnd','paternityReturn',
+    'laborNoticeExpiry','laborNoticeCreated','retirementFundStatus','retirementFundNumber',
+    'pharmacistLicenseNo','insurancePharmacistNo','licenseExpiry',
+    'driveFolderUrl','hasTimes','hasKot','hasMusubi','hasTicketRestaurant','hasStoreKey','hasNameCard','hasPhone','hasSeal','hasMynumber','note'];
+
+  let csv = '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
+  for (const e of employees) {
+    csv += fields.map(f => `"${(e[f] || '').replace(/"/g, '""')}"`).join(',') + '\n';
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `社員管理_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ===== ユーザー管理 =====
+async function loadUsers() {
+  try {
+    const users = await apiFetch('/api/users');
+    document.getElementById('userTableBody').innerHTML = users.map(u => `<tr>
+      <td>${esc(u.email)}</td><td>${esc(u.name)}</td>
+      <td><select onchange="changeUserRole('${esc(u.email)}', this.value)">
+        <option ${u.role==='viewer'?'selected':''}>viewer</option>
+        <option ${u.role==='editor'?'selected':''}>editor</option>
+        <option ${u.role==='admin'?'selected':''}>admin</option>
+      </select></td>
+      <td>${u.createdAt || ''}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeUser('${esc(u.email)}')">削除</button></td>
+    </tr>`).join('');
+  } catch (e) {
+    console.error('ユーザー取得失敗:', e);
+  }
+}
+
+function openUserModal() { document.getElementById('userModal').classList.add('show'); }
+
+async function addUser() {
+  const email = document.getElementById('newUserEmail').value;
+  const name = document.getElementById('newUserName').value;
+  const role = document.getElementById('newUserRole').value;
+  if (!email) return alert('メールアドレスが必要です');
+  try {
+    await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ email, name, role }) });
+    closeModal('userModal');
+    loadUsers();
+  } catch (e) { alert(e.message); }
+}
+
+async function changeUserRole(email, role) {
+  try { await apiFetch('/api/users/' + encodeURIComponent(email), { method: 'PUT', body: JSON.stringify({ role }) }); }
+  catch (e) { alert(e.message); loadUsers(); }
+}
+
+async function removeUser(email) {
+  if (!confirm(email + ' を削除しますか？')) return;
+  try { await apiFetch('/api/users/' + encodeURIComponent(email), { method: 'DELETE' }); loadUsers(); }
+  catch (e) { alert(e.message); }
+}
+</script>
+</body>
+</html>
