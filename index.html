@@ -279,9 +279,9 @@ tbody tr.leave-active { background: #fef3c7; }
 <!-- ===== Firebase SDK ===== -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
 // ===== 設定 =====
-const API_BASE = 'http://localhost:4001';
 const firebaseConfig = {
   apiKey: "AIzaSyC1Yr7rBcBJ0ACbO6w9G8jt2S9kVZSIqiQ",
   authDomain: "wise-patientdb.firebaseapp.com",
@@ -289,6 +289,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const db = firebase.firestore();
 
 // ===== グローバル状態 =====
 let currentUser = null;
@@ -313,12 +314,10 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('mainScreen').style.display = '';
     try {
-      const me = await apiFetch('/api/users/me');
-      userRole = me.role;
-      document.getElementById('userInfo').textContent = `${me.name} (${me.role})`;
+      await checkUserRole(user);
       applyPermissions();
       loadEmployees();
-      loadReminders();
+      computeReminders();
     } catch (e) {
       alert('アクセス権がありません: ' + (e.message || e));
       auth.signOut();
@@ -330,17 +329,28 @@ auth.onAuthStateChanged(async user => {
   }
 });
 
-async function apiFetch(path, options = {}) {
-  const token = await auth.currentUser.getIdToken();
-  const res = await fetch(API_BASE + path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...options.headers }
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+async function checkUserRole(user) {
+  const doc = await db.collection('users').doc(user.email).get();
+  if (doc.exists) {
+    const data = doc.data();
+    userRole = data.role || 'viewer';
+    document.getElementById('userInfo').textContent = `${data.name || user.displayName || ''} (${userRole})`;
+  } else {
+    const snap = await db.collection('users').get();
+    if (snap.empty) {
+      // 最初のユーザーは管理者として自動登録
+      userRole = 'admin';
+      await db.collection('users').doc(user.email).set({
+        email: user.email,
+        name: user.displayName || '',
+        role: userRole,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      document.getElementById('userInfo').textContent = `${user.displayName || ''} (admin)`;
+    } else {
+      throw new Error('未登録ユーザーです');
+    }
   }
-  return res.json();
 }
 
 function applyPermissions() {
@@ -362,10 +372,13 @@ function switchTab(tab) {
 
 // ===== 社員データ =====
 async function loadEmployees() {
-  employees = await apiFetch('/api/employees');
+  const snap = await db.collection('employees').get();
+  employees = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  employees.sort((a, b) => (a.kana || '').localeCompare(b.kana || '', 'ja'));
   populateFilters();
   renderTable();
   renderStats();
+  computeReminders();
 }
 
 function populateFilters() {
@@ -609,14 +622,16 @@ async function saveEmployee() {
   const data = getFormData();
   if (!data.name) return alert('氏名は必須です');
   try {
+    data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    data.updatedBy = currentUser.email;
     if (editingId) {
-      await apiFetch('/api/employees/' + editingId, { method: 'PUT', body: JSON.stringify(data) });
+      await db.collection('employees').doc(editingId).update(data);
     } else {
-      await apiFetch('/api/employees', { method: 'POST', body: JSON.stringify(data) });
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('employees').add(data);
     }
     closeModal('empModal');
     loadEmployees();
-    loadReminders();
   } catch (e) {
     alert('保存に失敗: ' + e.message);
   }
@@ -625,10 +640,9 @@ async function saveEmployee() {
 async function deleteEmployee() {
   if (!confirm('この社員を削除しますか？')) return;
   try {
-    await apiFetch('/api/employees/' + editingId, { method: 'DELETE' });
+    await db.collection('employees').doc(editingId).delete();
     closeModal('empModal');
     loadEmployees();
-    loadReminders();
   } catch (e) {
     alert('削除に失敗: ' + e.message);
   }
@@ -639,17 +653,43 @@ function closeModal(id) {
 }
 
 // ===== リマインド =====
-async function loadReminders() {
-  try {
-    reminders = await apiFetch('/api/reminders');
-    const badge = document.getElementById('reminderBadge');
-    const overdue = reminders.filter(r => r.overdue).length;
-    badge.textContent = overdue;
-    badge.style.display = overdue > 0 ? '' : 'none';
-    renderReminders();
-  } catch (e) {
-    console.error('リマインド取得失敗:', e);
+function computeReminders() {
+  const today = new Date().toISOString().slice(0, 10);
+  const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+  reminders = [];
+
+  for (const e of employees) {
+    if (e.status === '退職') continue;
+    const checks = [
+      { type: '転換確認', date: e.conversionCheckDate },
+      { type: 'キャリアアップ確認', date: e.careerUpCheckDate },
+      { type: '薬剤師2年目確認', date: e.pharmacist2yCheckDate },
+      { type: '労働通知書期限', date: e.laborNoticeExpiry },
+      { type: '免許証期限', date: e.licenseExpiry },
+      { type: '産休復帰', date: (e.maternityEnd && !e.maternityReturn) ? e.maternityEnd : null },
+      { type: '育休復帰', date: (e.childcareEnd && !e.childcareReturn) ? e.childcareEnd : null },
+      { type: 'パパ育休復帰', date: (e.paternityEnd && !e.paternityReturn) ? e.paternityEnd : null },
+    ];
+    for (const c of checks) {
+      if (c.date && c.date <= in90) {
+        reminders.push({
+          type: c.type,
+          date: c.date,
+          name: e.name,
+          store: e.store || '',
+          employeeId: e.id,
+          overdue: c.date < today,
+        });
+      }
+    }
   }
+
+  reminders.sort((a, b) => a.date.localeCompare(b.date));
+  const badge = document.getElementById('reminderBadge');
+  const overdue = reminders.filter(r => r.overdue).length;
+  badge.textContent = overdue;
+  badge.style.display = overdue > 0 ? '' : 'none';
+  renderReminders();
 }
 
 function renderReminders() {
@@ -798,13 +838,37 @@ async function doImport() {
   try {
     document.getElementById('btnDoImport').textContent = 'インポート中...';
     document.getElementById('btnDoImport').disabled = true;
-    const result = await apiFetch('/api/employees/import', {
-      method: 'POST', body: JSON.stringify({ records: importRecords })
-    });
-    alert(`インポート完了: 新規 ${result.added}件, 更新 ${result.updated}件`);
+
+    let added = 0, updated = 0;
+    // Firestore batch limit is 500, split if needed
+    const chunks = [];
+    for (let i = 0; i < importRecords.length; i += 400) {
+      chunks.push(importRecords.slice(i, i + 400));
+    }
+
+    for (const chunk of chunks) {
+      const batch = db.batch();
+      for (const record of chunk) {
+        const data = { ...record };
+        delete data.existingId;
+        data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        data.updatedBy = currentUser.email;
+
+        if (record.existingId) {
+          batch.update(db.collection('employees').doc(record.existingId), data);
+          updated++;
+        } else {
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          batch.set(db.collection('employees').doc(), data);
+          added++;
+        }
+      }
+      await batch.commit();
+    }
+
+    alert(`インポート完了: 新規 ${added}件, 更新 ${updated}件`);
     closeModal('importModal');
     loadEmployees();
-    loadReminders();
   } catch (e) {
     alert('インポート失敗: ' + e.message);
   } finally {
@@ -844,17 +908,21 @@ function exportCSV() {
 // ===== ユーザー管理 =====
 async function loadUsers() {
   try {
-    const users = await apiFetch('/api/users');
-    document.getElementById('userTableBody').innerHTML = users.map(u => `<tr>
+    const snap = await db.collection('users').get();
+    const users = snap.docs.map(doc => ({ email: doc.id, ...doc.data() }));
+    document.getElementById('userTableBody').innerHTML = users.map(u => {
+      const created = u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString('ja-JP') : u.createdAt) : '';
+      return `<tr>
       <td>${esc(u.email)}</td><td>${esc(u.name)}</td>
       <td><select onchange="changeUserRole('${esc(u.email)}', this.value)">
         <option ${u.role==='viewer'?'selected':''}>viewer</option>
         <option ${u.role==='editor'?'selected':''}>editor</option>
         <option ${u.role==='admin'?'selected':''}>admin</option>
       </select></td>
-      <td>${u.createdAt || ''}</td>
+      <td>${created}</td>
       <td><button class="btn btn-sm btn-danger" onclick="removeUser('${esc(u.email)}')">削除</button></td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
   } catch (e) {
     console.error('ユーザー取得失敗:', e);
   }
@@ -868,20 +936,25 @@ async function addUser() {
   const role = document.getElementById('newUserRole').value;
   if (!email) return alert('メールアドレスが必要です');
   try {
-    await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ email, name, role }) });
+    await db.collection('users').doc(email).set({
+      email,
+      name,
+      role,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     closeModal('userModal');
     loadUsers();
   } catch (e) { alert(e.message); }
 }
 
 async function changeUserRole(email, role) {
-  try { await apiFetch('/api/users/' + encodeURIComponent(email), { method: 'PUT', body: JSON.stringify({ role }) }); }
+  try { await db.collection('users').doc(email).update({ role }); }
   catch (e) { alert(e.message); loadUsers(); }
 }
 
 async function removeUser(email) {
   if (!confirm(email + ' を削除しますか？')) return;
-  try { await apiFetch('/api/users/' + encodeURIComponent(email), { method: 'DELETE' }); loadUsers(); }
+  try { await db.collection('users').doc(email).delete(); loadUsers(); }
   catch (e) { alert(e.message); }
 }
 </script>
