@@ -482,6 +482,20 @@ function openModal(id) {
     </div>
 
     <div class="form-section">
+      <h4>個人情報</h4>
+      <div class="form-grid form-grid-3">
+        <div class="form-group"><label>郵便番号</label><input type="text" id="f_postalCode" value="${esc(e.postalCode)}"></div>
+        <div class="form-group" style="grid-column:span 2;"><label>住所</label><input type="text" id="f_address" value="${esc(e.address)}"></div>
+        <div class="form-group"><label>生年月日</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}"></div>
+        <div class="form-group"><label>携帯番号</label><input type="text" id="f_phoneNumber" value="${esc(e.phoneNumber)}"></div>
+        <div class="form-group"><label>勤務時間</label><input type="text" id="f_workHours" value="${esc(e.workHours)}"></div>
+        <div class="form-group"><label>メール（個人）</label><input type="email" id="f_emailPersonal" value="${esc(e.emailPersonal)}"></div>
+        <div class="form-group"><label>メール（社用）</label><input type="email" id="f_emailWork" value="${esc(e.emailWork)}"></div>
+        <div class="form-group" style="grid-column:span 1;"><label>口座情報</label><input type="text" id="f_bankInfo" value="${esc(e.bankInfo)}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
       <h4>転換・リマインド</h4>
       <div class="form-grid form-grid-3">
         <div class="form-group"><label>転換日</label><input type="date" id="f_conversionDate" value="${e.conversionDate || ''}"></div>
@@ -518,10 +532,12 @@ function openModal(id) {
     </div>
 
     <div class="form-section">
-      <h4>中退共</h4>
+      <h4>中退共・雇用保険</h4>
       <div class="form-grid form-grid-2">
-        <div class="form-group"><label>一時停止</label><input type="text" id="f_retirementFundStatus" value="${esc(e.retirementFundStatus)}"></div>
+        <div class="form-group"><label>中退共 一時停止</label><input type="text" id="f_retirementFundStatus" value="${esc(e.retirementFundStatus)}"></div>
         <div class="form-group"><label>共済者番号(11桁)</label><input type="text" id="f_retirementFundNumber" value="${esc(e.retirementFundNumber)}"></div>
+        <div class="form-group"><label>雇用保険 被保険者番号</label><input type="text" id="f_empInsuranceNo" value="${esc(e.empInsuranceNo)}"></div>
+        <div class="form-group"><label>雇用保険 取得日</label><input type="text" id="f_empInsuranceDate" value="${esc(e.empInsuranceDate)}"></div>
       </div>
     </div>
 
@@ -598,6 +614,10 @@ function getFormData() {
     store: g('f_store'),
     jobType: g('f_jobType'), employmentType: g('f_employmentType'), position: g('f_position'),
     hireDate: g('f_hireDate'), leaveDate: g('f_leaveDate'), status: g('f_status'),
+    postalCode: g('f_postalCode'), address: g('f_address'), birthDate: g('f_birthDate'),
+    phoneNumber: g('f_phoneNumber'), workHours: g('f_workHours'),
+    emailPersonal: g('f_emailPersonal'), emailWork: g('f_emailWork'), bankInfo: g('f_bankInfo'),
+    empInsuranceNo: g('f_empInsuranceNo'), empInsuranceDate: g('f_empInsuranceDate'),
     conversionDate: g('f_conversionDate'), conversionCheckDate: g('f_conversionCheckDate'),
     careerUpDate: g('f_careerUpDate'), careerUpCheckDate: g('f_careerUpCheckDate'),
     pharmacist2yDate: g('f_pharmacist2yDate'), pharmacist2yCheckDate: g('f_pharmacist2yCheckDate'),
@@ -734,7 +754,12 @@ const CSV_COL_MAP = {
   'タイムズ': 'hasTimes', 'KOT': 'hasKot', 'ムスビアカウント': 'hasMusubi',
   'チケットレストラン': 'hasTicketRestaurant', '店舗キー': 'hasStoreKey',
   '名刺': 'hasNameCard', '携帯': 'hasPhone', '印鑑': 'hasSeal', 'マイナンバー': 'hasMynumber',
-  '備考': 'note',
+  '郵便番号': 'postalCode', '住所': 'address',
+  'メールアドレス（個人）': 'emailPersonal', 'メールアドレス（社用）': 'emailWork',
+  '携帯番号': 'phoneNumber', '生年月日（西暦）': 'birthDate',
+  '勤務時間': 'workHours', '口座情報': 'bankInfo',
+  '雇用保険被保険者番号': 'empInsuranceNo', '被保険者となった日': 'empInsuranceDate',
+  // 「登録年月」「備考」は同名ヘッダーが2列あるため handleCSVFile 内で文脈振り分け
 };
 
 function openImportModal() {
@@ -773,6 +798,13 @@ async function handleCSVFile(file) {
       if (clean === key.replace(/\s+/g, '')) { colMap[i] = val; break; }
     }
   });
+  // 同名ヘッダーが2列ある項目を出現順で別フィールドへ振り分け
+  const assignDup = (label, fields) => {
+    const idxs = headers.map((h, i) => h.replace(/\s+/g, '') === label ? i : -1).filter(i => i >= 0);
+    fields.forEach((f, k) => { if (idxs[k] != null) colMap[idxs[k]] = f; });
+  };
+  assignDup('登録年月', ['pharmacistLicenseDate', 'insurancePharmacistDate']);
+  assignDup('備考', ['note', 'note2']);
 
   importRecords = [];
   for (let r = 1; r < rows.length; r++) {
@@ -887,15 +919,17 @@ function exportCSV() {
     '出産予定日','産前産後開始','産前産後終了','産前産後復帰','育休開始','育休終了','育休復帰',
     'パパ育休開始','パパ育休終了','パパ育休復帰',
     '労働通知書期限','労働通知書作成','中退共','共済者番号',
-    '薬剤師免許証番号','保険薬剤師登録番号','免許証有効期限',
-    'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯','印鑑','マイナンバー','備考'];
+    '薬剤師免許証番号','薬剤師免許登録年月','保険薬剤師登録番号','保険薬剤師登録年月','免許証有効期限',
+    'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯(貸与)','印鑑','マイナンバー','備考','備考2',
+    'メール','Slack ID','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','メール(個人)','メール(社用)','口座情報','雇用保険番号','雇用保険取得日'];
   const fields = ['name','kana','store','jobType','employmentType','position','hireDate','status',
     'conversionDate','conversionCheckDate','careerUpDate','careerUpCheckDate','pharmacist2yDate','pharmacist2yCheckDate',
     'dueDate','maternityStart','maternityEnd','maternityReturn','childcareStart','childcareEnd','childcareReturn',
     'paternityStart','paternityEnd','paternityReturn',
     'laborNoticeExpiry','laborNoticeCreated','retirementFundStatus','retirementFundNumber',
-    'pharmacistLicenseNo','insurancePharmacistNo','licenseExpiry',
-    'driveFolderUrl','hasTimes','hasKot','hasMusubi','hasTicketRestaurant','hasStoreKey','hasNameCard','hasPhone','hasSeal','hasMynumber','note'];
+    'pharmacistLicenseNo','pharmacistLicenseDate','insurancePharmacistNo','insurancePharmacistDate','licenseExpiry',
+    'driveFolderUrl','hasTimes','hasKot','hasMusubi','hasTicketRestaurant','hasStoreKey','hasNameCard','hasPhone','hasSeal','hasMynumber','note','note2',
+    'email','slackId','leaveDate','postalCode','address','birthDate','phoneNumber','workHours','emailPersonal','emailWork','bankInfo','empInsuranceNo','empInsuranceDate'];
 
   let csv = '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
   for (const e of employees) {
