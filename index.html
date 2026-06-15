@@ -58,11 +58,16 @@ body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sa
 
 /* ===== テーブル ===== */
 .table-wrap { overflow-x: auto; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 thead th { background: #2c3e50; color: #fff; padding: 10px 12px; text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-weight: 500; }
-tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
-tbody tr:hover { background: #f0f7ff; }
-tbody tr.leave-active { background: #fef3c7; }
+tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; background: var(--color-surface); }
+/* 氏名列を横スクロール時に左固定（ヘッダーは既にtop固定） */
+thead th:first-child, tbody td:first-child { position: sticky; left: 0; }
+thead th:first-child { z-index: 3; }
+tbody td:first-child { z-index: 1; box-shadow: 1px 0 0 var(--color-border); font-weight: 500; }
+tbody tr:hover td { background: #f0f7ff; }
+tbody tr.leave-active td { background: #fef3c7; }
+.cell-clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .status-badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
 .status-在籍 { background: #dcfce7; color: #166534; }
 .status-休職 { background: #fef3c7; color: #92400e; }
@@ -176,8 +181,11 @@ tbody tr.leave-active { background: #fef3c7; }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>入社日</th>
-          <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>ステータス</th><th></th>
+          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>ステータス</th>
+          <th>生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
+          <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
+          <th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th>マイナンバー</th>
+          <th>Drive</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
       </table>
@@ -426,11 +434,33 @@ function renderTable() {
       <td>${esc(e.store)}</td>
       <td>${esc(e.jobType)}</td>
       <td>${esc(e.employmentType)}</td>
+      <td>${esc(e.position)}</td>
       <td>${esc(e.hireDate)}</td>
+      <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
+      <td>${esc(e.birthDate)}</td>
+      <td>${esc(e.phoneNumber)}</td>
+      <td class="cell-clip" title="${esc(e.emailWork)}">${esc(e.emailWork)}</td>
+      <td class="cell-clip" title="${esc(e.emailPersonal)}">${esc(e.emailPersonal)}</td>
+      <td>${esc(e.postalCode)}</td>
+      <td class="cell-clip" title="${esc(e.address)}">${esc(e.address)}</td>
+      <td>${esc(e.workHours)}</td>
       <td class="${convStatus.cls}">${convStatus.text}</td>
       <td class="${lnStatus.cls}">${lnStatus.text}</td>
       <td>${leaveText}</td>
-      <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
+      <td>${esc(e.empInsuranceNo)}</td>
+      <td>${esc(e.pharmacistLicenseNo)}</td>
+      <td>${esc(e.licenseExpiry)}</td>
+      <td>${esc(e.hasKot)}</td>
+      <td>${esc(e.hasTimes)}</td>
+      <td>${esc(e.hasMusubi)}</td>
+      <td>${esc(e.hasTicketRestaurant)}</td>
+      <td>${esc(e.hasStoreKey)}</td>
+      <td>${esc(e.hasNameCard)}</td>
+      <td>${esc(e.hasPhone)}</td>
+      <td>${esc(e.hasSeal)}</td>
+      <td>${esc(e.hasMynumber)}</td>
+      <td>${e.driveFolderUrl ? `<a href="${esc(e.driveFolderUrl)}" target="_blank" rel="noopener">開く</a>` : ''}</td>
+      <td class="cell-clip" title="${esc(e.note)}">${esc(e.note)}</td>
       <td>${userRole !== 'viewer' ? `<button class="btn btn-sm btn-outline" onclick="openModal('${e.id}')">編集</button>` : ''}</td>
     </tr>`;
   }).join('');
@@ -453,7 +483,7 @@ function getLeaveText(e) {
   return '-';
 }
 
-function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ===== 社員モーダル =====
 function openModal(id) {
@@ -469,7 +499,6 @@ function openModal(id) {
       <div class="form-grid">
         <div class="form-group"><label>氏名 *</label><input type="text" id="f_name" value="${esc(e.name)}"></div>
         <div class="form-group"><label>フリガナ</label><input type="text" id="f_kana" value="${esc(e.kana)}"></div>
-        <div class="form-group"><label>メールアドレス</label><input type="email" id="f_email" value="${esc(e.email)}"></div>
         <div class="form-group"><label>Slack ID</label><input type="text" id="f_slackId" value="${esc(e.slackId)}" placeholder="U0XXXXXXXXX"></div>
         <div class="form-group"><label>店舗</label><select id="f_store">${storeOptions(e.store)}</select></div>
         <div class="form-group"><label>職種</label><select id="f_jobType"><option value="">-</option><option ${e.jobType==='薬剤師'?'selected':''}>薬剤師</option><option ${e.jobType==='事務'?'selected':''}>事務</option><option ${e.jobType==='管理栄養士'?'selected':''}>管理栄養士</option></select></div>
@@ -489,8 +518,8 @@ function openModal(id) {
         <div class="form-group"><label>生年月日</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}"></div>
         <div class="form-group"><label>携帯番号</label><input type="text" id="f_phoneNumber" value="${esc(e.phoneNumber)}"></div>
         <div class="form-group"><label>勤務時間</label><input type="text" id="f_workHours" value="${esc(e.workHours)}"></div>
-        <div class="form-group"><label>メール（個人）</label><input type="email" id="f_emailPersonal" value="${esc(e.emailPersonal)}"></div>
-        <div class="form-group"><label>メール（社用）</label><input type="email" id="f_emailWork" value="${esc(e.emailWork)}"></div>
+        <div class="form-group"><label>会社メール</label><input type="email" id="f_emailWork" value="${esc(e.emailWork)}"></div>
+        <div class="form-group"><label>個人メール</label><input type="email" id="f_emailPersonal" value="${esc(e.emailPersonal)}"></div>
         <div class="form-group" style="grid-column:span 1;"><label>口座情報</label><input type="text" id="f_bankInfo" value="${esc(e.bankInfo)}"></div>
       </div>
     </div>
@@ -610,7 +639,7 @@ function getFormData() {
   const g = id => document.getElementById(id)?.value || '';
   const cb = id => document.getElementById(id)?.checked ? '〇' : '';
   return {
-    name: g('f_name'), kana: g('f_kana'), email: g('f_email'), slackId: g('f_slackId'),
+    name: g('f_name'), kana: g('f_kana'), slackId: g('f_slackId'),
     store: g('f_store'),
     jobType: g('f_jobType'), employmentType: g('f_employmentType'), position: g('f_position'),
     hireDate: g('f_hireDate'), leaveDate: g('f_leaveDate'), status: g('f_status'),
@@ -921,7 +950,7 @@ function exportCSV() {
     '労働通知書期限','労働通知書作成','中退共','共済者番号',
     '薬剤師免許証番号','薬剤師免許登録年月','保険薬剤師登録番号','保険薬剤師登録年月','免許証有効期限',
     'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯(貸与)','印鑑','マイナンバー','備考','備考2',
-    'メール','Slack ID','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','メール(個人)','メール(社用)','口座情報','雇用保険番号','雇用保険取得日'];
+    'Slack ID','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','会社メール','個人メール','口座情報','雇用保険番号','雇用保険取得日'];
   const fields = ['name','kana','store','jobType','employmentType','position','hireDate','status',
     'conversionDate','conversionCheckDate','careerUpDate','careerUpCheckDate','pharmacist2yDate','pharmacist2yCheckDate',
     'dueDate','maternityStart','maternityEnd','maternityReturn','childcareStart','childcareEnd','childcareReturn',
@@ -929,7 +958,7 @@ function exportCSV() {
     'laborNoticeExpiry','laborNoticeCreated','retirementFundStatus','retirementFundNumber',
     'pharmacistLicenseNo','pharmacistLicenseDate','insurancePharmacistNo','insurancePharmacistDate','licenseExpiry',
     'driveFolderUrl','hasTimes','hasKot','hasMusubi','hasTicketRestaurant','hasStoreKey','hasNameCard','hasPhone','hasSeal','hasMynumber','note','note2',
-    'email','slackId','leaveDate','postalCode','address','birthDate','phoneNumber','workHours','emailPersonal','emailWork','bankInfo','empInsuranceNo','empInsuranceDate'];
+    'slackId','leaveDate','postalCode','address','birthDate','phoneNumber','workHours','emailWork','emailPersonal','bankInfo','empInsuranceNo','empInsuranceDate'];
 
   let csv = '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
   for (const e of employees) {
