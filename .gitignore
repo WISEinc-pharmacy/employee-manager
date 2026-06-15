@@ -1,0 +1,13 @@
+# 社員個人情報を含むデータは公開リポジトリに絶対コミットしない
+*.csv
+import_employees_*.csv
+
+# Firebase秘密鍵・認証情報
+firebase-service-account.json
+*.key
+.env
+.env.*
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
