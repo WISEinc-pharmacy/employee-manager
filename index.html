@@ -716,7 +716,7 @@ function renderReminders() {
 // ===== CSVインポート =====
 const CSV_COL_MAP = {
   '氏名': 'name', 'フリガナ': 'kana', '職種': 'jobType', '雇用形態': 'employmentType',
-  '役職': 'position', '店舗': 'store', '店舗（メイン）': 'store', '入社日': 'hireDate',
+  '役職': 'position', '店舗': 'store', '店舗（メイン）': 'store', '店舗（メイン）（KOTより確認）': 'store', '入社日': 'hireDate',
   '転換日': 'conversionDate', '転換確認日': 'conversionCheckDate',
   'キャリアアップ': 'careerUpDate', 'キャリアアップ確認日': 'careerUpCheckDate',
   '薬剤師２年目': 'pharmacist2yDate', '薬剤師２年目給与転換確認日': 'pharmacist2yCheckDate',
@@ -768,8 +768,9 @@ async function handleCSVFile(file) {
   headers.forEach((h, i) => {
     // 改行含むヘッダーにも対応
     const clean = h.replace(/\s+/g, '');
+    // 完全一致のみ（部分一致だと「店舗キー」が「店舗」に誤マッチする等の取り違えが起きる）
     for (const [key, val] of Object.entries(CSV_COL_MAP)) {
-      if (clean.includes(key.replace(/\s+/g, ''))) { colMap[i] = val; break; }
+      if (clean === key.replace(/\s+/g, '')) { colMap[i] = val; break; }
     }
   });
 
@@ -784,6 +785,8 @@ async function handleCSVFile(file) {
       if (field.includes('Date') || field.includes('date') || field.includes('Start') || field.includes('End') || field.includes('Return') || field.includes('Expiry') || field === 'hireDate') {
         val = val.replace(/\//g, '-');
       }
+      // 同一fieldに複数列が当たる場合、空値で既存の値を上書きしない（店舗など）
+      if (val === '' && rec[field]) continue;
       rec[field] = val;
     }
     if (!rec.name) continue;
