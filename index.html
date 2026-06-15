@@ -459,7 +459,7 @@ function renderTable() {
       <td>${esc(e.hasPhone)}</td>
       <td>${esc(e.hasSeal)}</td>
       <td>${esc(e.hasMynumber)}</td>
-      <td>${e.driveFolderUrl ? `<a href="${esc(e.driveFolderUrl)}" target="_blank" rel="noopener">開く</a>` : ''}</td>
+      <td>${safeUrl(e.driveFolderUrl) ? `<a href="${esc(safeUrl(e.driveFolderUrl))}" target="_blank" rel="noopener noreferrer">開く</a>` : ''}</td>
       <td class="cell-clip" title="${esc(e.note)}">${esc(e.note)}</td>
       <td>${userRole !== 'viewer' ? `<button class="btn btn-sm btn-outline" onclick="openModal('${e.id}')">編集</button>` : ''}</td>
     </tr>`;
@@ -484,6 +484,8 @@ function getLeaveText(e) {
 }
 
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// http(s) のURLだけをリンク化対象として返す（javascript:等のスキームインジェクション防止）
+function safeUrl(u) { return /^https?:\/\//i.test((u || '').trim()) ? (u || '').trim() : ''; }
 
 // ===== 社員モーダル =====
 function openModal(id) {
@@ -659,7 +661,7 @@ function getFormData() {
     retirementFundStatus: g('f_retirementFundStatus'), retirementFundNumber: g('f_retirementFundNumber'),
     pharmacistLicenseUrl: g('f_pharmacistLicenseUrl'), pharmacistLicenseNo: g('f_pharmacistLicenseNo'), pharmacistLicenseDate: g('f_pharmacistLicenseDate'),
     insurancePharmacistUrl: g('f_insurancePharmacistUrl'), insurancePharmacistNo: g('f_insurancePharmacistNo'), insurancePharmacistDate: g('f_insurancePharmacistDate'),
-    licenseExpiry: g('f_licenseExpiry'), driveFolderUrl: g('f_driveFolderUrl'),
+    licenseExpiry: g('f_licenseExpiry'), driveFolderUrl: (/^\s*(javascript|data|vbscript):/i.test(g('f_driveFolderUrl')) ? '' : g('f_driveFolderUrl').trim()),
     hasTimes: cb('f_hasTimes'), hasKot: cb('f_hasKot'), hasMusubi: cb('f_hasMusubi'),
     hasTicketRestaurant: cb('f_hasTicketRestaurant'), hasStoreKey: cb('f_hasStoreKey'),
     hasNameCard: cb('f_hasNameCard'), hasPhone: cb('f_hasPhone'), hasSeal: cb('f_hasSeal'), hasMynumber: cb('f_hasMynumber'),
