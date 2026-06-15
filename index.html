@@ -390,7 +390,7 @@ function populateFilters() {
 }
 
 function renderStats() {
-  const active = employees.filter(e => e.status === '在籍');
+  const active = employees.filter(e => (e.status || '在籍') === '在籍');
   const onLeave = employees.filter(e => e.status === '休職');
   const stores = [...new Set(active.map(e => e.store).filter(Boolean))];
   document.getElementById('statsBar').innerHTML = `
@@ -408,7 +408,7 @@ function renderTable() {
 
   let filtered = employees;
   if (store) filtered = filtered.filter(e => e.store === store);
-  if (status) filtered = filtered.filter(e => e.status === status);
+  if (status) filtered = filtered.filter(e => (e.status || '在籍') === status);
   if (search) filtered = filtered.filter(e =>
     (e.name || '').toLowerCase().includes(search) || (e.kana || '').toLowerCase().includes(search)
   );
