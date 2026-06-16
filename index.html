@@ -183,10 +183,10 @@ body.role-viewer .sensitive-col { display: none !important; }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>ステータス</th>
+          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>勤続年数</th><th>年齢</th><th>ステータス</th>
           <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
-          <th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
+          <th>KOT番号</th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
           <th>Drive</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
@@ -440,6 +440,8 @@ function renderTable() {
       <td>${esc(e.employmentType)}</td>
       <td>${esc(e.position)}</td>
       <td>${esc(e.hireDate)}</td>
+      <td>${calcTenure(e.hireDate)}</td>
+      <td>${calcAge(e.birthDate)}</td>
       <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
       <td class="sensitive-col">${esc(e.birthDate)}</td>
       <td>${esc(e.phoneNumber)}</td>
@@ -454,6 +456,7 @@ function renderTable() {
       <td>${esc(e.empInsuranceNo)}</td>
       <td>${esc(e.pharmacistLicenseNo)}</td>
       <td>${esc(e.licenseExpiry)}</td>
+      <td>${esc(e.kotNumber)}</td>
       <td>${esc(e.hasKot)}</td>
       <td>${esc(e.hasTimes)}</td>
       <td>${esc(e.hasMusubi)}</td>
@@ -490,6 +493,12 @@ function getLeaveText(e) {
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // http(s) のURLだけをリンク化対象として返す（javascript:等のスキームインジェクション防止）
 function safeUrl(u) { return /^https?:\/\//i.test((u || '').trim()) ? (u || '').trim() : ''; }
+// 生年月日→年齢（自動計算）
+function calcAge(b){ if(!b)return''; const d=new Date(b); if(isNaN(d))return''; const t=new Date(); let a=t.getFullYear()-d.getFullYear(); const md=t.getMonth()-d.getMonth(); if(md<0||(md===0&&t.getDate()<d.getDate()))a--; return (a>=0&&a<130)?a+'歳':''; }
+// 入社日→勤続年数（自動計算）
+function calcTenure(h){ if(!h)return''; const d=new Date(h); if(isNaN(d))return''; const t=new Date(); let mo=(t.getFullYear()-d.getFullYear())*12+(t.getMonth()-d.getMonth()); if(t.getDate()<d.getDate())mo--; if(mo<0)return''; return Math.floor(mo/12)+'年'+(mo%12)+'ヶ月'; }
+// 西暦(YYYY-MM-DD)→和暦
+function toWareki(b){ if(!b)return''; const d=new Date(b); if(isNaN(d))return''; const eras=[{n:'令和',s:new Date('2019-05-01')},{n:'平成',s:new Date('1989-01-08')},{n:'昭和',s:new Date('1926-12-25')}]; for(const e of eras){ if(d.getTime()>=e.s.getTime()){ const yr=d.getFullYear()-e.s.getFullYear()+1; return e.n+(yr===1?'元':yr)+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; } } return ''; }
 
 // ===== 社員モーダル =====
 function openModal(id) {
@@ -506,11 +515,13 @@ function openModal(id) {
         <div class="form-group"><label>氏名 *</label><input type="text" id="f_name" value="${esc(e.name)}"></div>
         <div class="form-group"><label>フリガナ</label><input type="text" id="f_kana" value="${esc(e.kana)}"></div>
         <div class="form-group"><label>Slack ID</label><input type="text" id="f_slackId" value="${esc(e.slackId)}" placeholder="U0XXXXXXXXX"></div>
+        <div class="form-group"><label>KOT番号</label><input type="text" id="f_kotNumber" value="${esc(e.kotNumber)}"></div>
         <div class="form-group"><label>店舗</label><select id="f_store">${storeOptions(e.store)}</select></div>
         <div class="form-group"><label>職種</label><select id="f_jobType"><option value="">-</option><option ${e.jobType==='薬剤師'?'selected':''}>薬剤師</option><option ${e.jobType==='事務'?'selected':''}>事務</option><option ${e.jobType==='管理栄養士'?'selected':''}>管理栄養士</option></select></div>
         <div class="form-group"><label>雇用形態</label><select id="f_employmentType"><option value="">-</option><option ${e.employmentType==='正社員'?'selected':''}>正社員</option><option ${e.employmentType==='有期'?'selected':''}>有期</option><option ${e.employmentType==='パート'?'selected':''}>パート</option></select></div>
         <div class="form-group"><label>役職</label><input type="text" id="f_position" value="${esc(e.position)}"></div>
         <div class="form-group"><label>入社日</label><input type="date" id="f_hireDate" value="${e.hireDate || ''}"></div>
+        <div class="form-group"><label>勤続年数（自動）</label><input type="text" value="${esc(calcTenure(e.hireDate))}" readonly style="background:#f5f7fa"></div>
         <div class="form-group"><label>退職日</label><input type="date" id="f_leaveDate" value="${e.leaveDate || ''}"></div>
         <div class="form-group"><label>ステータス</label><select id="f_status"><option ${(e.status||'在籍')==='在籍'?'selected':''}>在籍</option><option ${e.status==='休職'?'selected':''}>休職</option><option ${e.status==='退職'?'selected':''}>退職</option></select></div>
       </div>
@@ -521,7 +532,9 @@ function openModal(id) {
       <div class="form-grid form-grid-3">
         <div class="form-group"><label>郵便番号</label><input type="text" id="f_postalCode" value="${esc(e.postalCode)}"></div>
         <div class="form-group" style="grid-column:span 2;"><label>住所</label><input type="text" id="f_address" value="${esc(e.address)}"></div>
-        <div class="form-group sensitive-col"><label>生年月日</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}"></div>
+        <div class="form-group sensitive-col"><label>生年月日（西暦）</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group sensitive-col"><label>生年月日（和暦・自動）</label><input type="text" value="${esc(toWareki(e.birthDate))}" readonly style="background:#f5f7fa"></div>
+        <div class="form-group sensitive-col"><label>年齢（自動）</label><input type="text" value="${esc(calcAge(e.birthDate))}" readonly style="background:#f5f7fa"></div>
         <div class="form-group"><label>携帯番号</label><input type="text" id="f_phoneNumber" value="${esc(e.phoneNumber)}"></div>
         <div class="form-group"><label>勤務時間</label><input type="text" id="f_workHours" value="${esc(e.workHours)}"></div>
         <div class="form-group"><label>会社メール</label><input type="email" id="f_emailWork" value="${esc(e.emailWork)}"></div>
@@ -645,7 +658,7 @@ function getFormData() {
   const g = id => document.getElementById(id)?.value || '';
   const cb = id => document.getElementById(id)?.checked ? '〇' : '';
   return {
-    name: g('f_name'), kana: g('f_kana'), slackId: g('f_slackId'),
+    name: g('f_name'), kana: g('f_kana'), slackId: g('f_slackId'), kotNumber: g('f_kotNumber'),
     store: g('f_store'),
     jobType: g('f_jobType'), employmentType: g('f_employmentType'), position: g('f_position'),
     hireDate: g('f_hireDate'), leaveDate: g('f_leaveDate'), status: g('f_status'),
@@ -956,7 +969,7 @@ function exportCSV() {
     '労働通知書期限','労働通知書作成','中退共','共済者番号',
     '薬剤師免許証番号','薬剤師免許登録年月','保険薬剤師登録番号','保険薬剤師登録年月','免許証有効期限',
     'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯(貸与)','印鑑','マイナンバー','備考','備考2',
-    'Slack ID','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','会社メール','個人メール','口座情報','雇用保険番号','雇用保険取得日'];
+    'Slack ID','KOT番号','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','会社メール','個人メール','口座情報','雇用保険番号','雇用保険取得日'];
   const fields = ['name','kana','store','jobType','employmentType','position','hireDate','status',
     'conversionDate','conversionCheckDate','careerUpDate','careerUpCheckDate','pharmacist2yDate','pharmacist2yCheckDate',
     'dueDate','maternityStart','maternityEnd','maternityReturn','childcareStart','childcareEnd','childcareReturn',
@@ -964,7 +977,7 @@ function exportCSV() {
     'laborNoticeExpiry','laborNoticeCreated','retirementFundStatus','retirementFundNumber',
     'pharmacistLicenseNo','pharmacistLicenseDate','insurancePharmacistNo','insurancePharmacistDate','licenseExpiry',
     'driveFolderUrl','hasTimes','hasKot','hasMusubi','hasTicketRestaurant','hasStoreKey','hasNameCard','hasPhone','hasSeal','hasMynumber','note','note2',
-    'slackId','leaveDate','postalCode','address','birthDate','phoneNumber','workHours','emailWork','emailPersonal','bankInfo','empInsuranceNo','empInsuranceDate'];
+    'slackId','kotNumber','leaveDate','postalCode','address','birthDate','phoneNumber','workHours','emailWork','emailPersonal','bankInfo','empInsuranceNo','empInsuranceDate'];
 
   let csv = '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
   for (const e of employees) {
