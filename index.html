@@ -68,6 +68,8 @@ tbody td:first-child { z-index: 1; box-shadow: 1px 0 0 var(--color-border); font
 tbody tr:hover td { background: #f0f7ff; }
 tbody tr.leave-active td { background: #fef3c7; }
 .cell-clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+/* 最機微項目（口座・生年月日・マイナンバー）はviewerには非表示。admin/editorは表示 */
+body.role-viewer .sensitive-col { display: none !important; }
 .status-badge { padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
 .status-在籍 { background: #dcfce7; color: #166534; }
 .status-休職 { background: #fef3c7; color: #92400e; }
@@ -182,9 +184,9 @@ tbody tr.leave-active td { background: #fef3c7; }
       <table>
         <thead><tr>
           <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>ステータス</th>
-          <th>生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
+          <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
-          <th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th>マイナンバー</th>
+          <th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
           <th>Drive</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
@@ -363,6 +365,8 @@ async function checkUserRole(user) {
 
 function applyPermissions() {
   const canEdit = userRole === 'admin' || userRole === 'editor';
+  // viewerには最機微項目(口座/生年月日/マイナンバー)を非表示にする
+  document.body.classList.toggle('role-viewer', userRole === 'viewer');
   document.getElementById('btnAdd').style.display = canEdit ? '' : 'none';
   document.getElementById('btnImport').style.display = canEdit ? '' : 'none';
   document.querySelectorAll('[data-tab="users"]').forEach(el => {
@@ -437,7 +441,7 @@ function renderTable() {
       <td>${esc(e.position)}</td>
       <td>${esc(e.hireDate)}</td>
       <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
-      <td>${esc(e.birthDate)}</td>
+      <td class="sensitive-col">${esc(e.birthDate)}</td>
       <td>${esc(e.phoneNumber)}</td>
       <td class="cell-clip" title="${esc(e.emailWork)}">${esc(e.emailWork)}</td>
       <td class="cell-clip" title="${esc(e.emailPersonal)}">${esc(e.emailPersonal)}</td>
@@ -458,7 +462,7 @@ function renderTable() {
       <td>${esc(e.hasNameCard)}</td>
       <td>${esc(e.hasPhone)}</td>
       <td>${esc(e.hasSeal)}</td>
-      <td>${esc(e.hasMynumber)}</td>
+      <td class="sensitive-col">${esc(e.hasMynumber)}</td>
       <td>${safeUrl(e.driveFolderUrl) ? `<a href="${esc(safeUrl(e.driveFolderUrl))}" target="_blank" rel="noopener noreferrer">開く</a>` : ''}</td>
       <td class="cell-clip" title="${esc(e.note)}">${esc(e.note)}</td>
       <td>${userRole !== 'viewer' ? `<button class="btn btn-sm btn-outline" onclick="openModal('${e.id}')">編集</button>` : ''}</td>
@@ -517,12 +521,12 @@ function openModal(id) {
       <div class="form-grid form-grid-3">
         <div class="form-group"><label>郵便番号</label><input type="text" id="f_postalCode" value="${esc(e.postalCode)}"></div>
         <div class="form-group" style="grid-column:span 2;"><label>住所</label><input type="text" id="f_address" value="${esc(e.address)}"></div>
-        <div class="form-group"><label>生年月日</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}"></div>
+        <div class="form-group sensitive-col"><label>生年月日</label><input type="text" id="f_birthDate" value="${esc(e.birthDate)}"></div>
         <div class="form-group"><label>携帯番号</label><input type="text" id="f_phoneNumber" value="${esc(e.phoneNumber)}"></div>
         <div class="form-group"><label>勤務時間</label><input type="text" id="f_workHours" value="${esc(e.workHours)}"></div>
         <div class="form-group"><label>会社メール</label><input type="email" id="f_emailWork" value="${esc(e.emailWork)}"></div>
         <div class="form-group"><label>個人メール</label><input type="email" id="f_emailPersonal" value="${esc(e.emailPersonal)}"></div>
-        <div class="form-group" style="grid-column:span 1;"><label>口座情報</label><input type="text" id="f_bankInfo" value="${esc(e.bankInfo)}"></div>
+        <div class="form-group sensitive-col" style="grid-column:span 1;"><label>口座情報</label><input type="text" id="f_bankInfo" value="${esc(e.bankInfo)}"></div>
       </div>
     </div>
 
