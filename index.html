@@ -159,6 +159,7 @@ body.role-viewer .sensitive-col { display: none !important; }
   <div class="tabs">
     <div class="tab active" data-tab="employees" onclick="switchTab('employees')">社員一覧</div>
     <div class="tab" data-tab="reminders" onclick="switchTab('reminders')">リマインド <span id="reminderBadge" class="tab-badge" style="display:none;">0</span></div>
+    <div class="tab" data-tab="careerup" onclick="switchTab('careerup')">キャリアアップ管理</div>
     <div class="tab" data-tab="users" onclick="switchTab('users')">ユーザー管理</div>
   </div>
 
@@ -227,6 +228,24 @@ body.role-viewer .sensitive-col { display: none !important; }
         <tbody id="userTableBody"></tbody>
       </table>
     </div>
+  </div>
+
+  <!-- ===== キャリアアップ管理タブ ===== -->
+  <div id="tab-careerup" class="container" style="display:none;">
+    <div class="stats-bar" id="careerupStats"></div>
+    <div class="toolbar">
+      <select id="careerupTypeFilter" onchange="renderCareerup()">
+        <option value="">全種別</option>
+        <option value="正社員転換">正社員転換</option>
+        <option value="キャリアアップ助成金">キャリアアップ助成金</option>
+        <option value="薬剤師2年目">薬剤師2年目</option>
+      </select>
+      <select id="careerupStoreFilter" onchange="renderCareerup()">
+        <option value="">全店舗</option>
+      </select>
+    </div>
+    <div id="careerupContent"></div>
+    <div style="margin-top:12px;color:var(--color-text-sub);font-size:13px;" id="careerupCount"></div>
   </div>
 </div>
 
@@ -381,6 +400,7 @@ function switchTab(tab) {
   document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
   document.getElementById('tab-' + tab).style.display = '';
   if (tab === 'users' && userRole === 'admin') loadUsers();
+  if (tab === 'careerup') renderCareerup();
 }
 
 // ===== 社員データ =====
@@ -780,6 +800,120 @@ function renderReminders() {
       </div>`;
     }).join('');
   document.getElementById('reminderCount').textContent = `${list.length}件`;
+}
+
+// ===== キャリアアップ管理 =====
+function renderCareerup() {
+  const today = new Date().toISOString().slice(0, 10);
+  const past90 = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+
+  // 店舗フィルター初期化（初回のみ）
+  const storeSelect = document.getElementById('careerupStoreFilter');
+  if (storeSelect.options.length <= 1) {
+    const stores = [...new Set(employees.map(e => e.store).filter(Boolean))].sort();
+    stores.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      storeSelect.appendChild(opt);
+    });
+  }
+
+  const typeFilter = document.getElementById('careerupTypeFilter').value;
+  const storeFilter = storeSelect.value;
+
+  function addMonths(dateStr, months) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0, 10);
+  }
+
+  const TYPES = [
+    { key: '正社員転換',          field: 'conversionDate' },
+    { key: 'キャリアアップ助成金', field: 'careerUpDate' },
+    { key: '薬剤師2年目',         field: 'pharmacist2yDate' },
+  ];
+
+  const allItems = [];
+  for (const e of employees) {
+    if (e.status === '退職') continue;
+    for (const t of TYPES) {
+      const milestoneDate = e[t.field];
+      if (!milestoneDate) continue;
+      const fireDate = addMonths(milestoneDate, -2);
+      if (!fireDate) continue;
+      // 発火判定: 発火予定日 <= 今日 かつ 節目日が90日以上過去でない
+      if (fireDate <= today && milestoneDate >= past90) {
+        const daysToMilestone = Math.ceil((new Date(milestoneDate) - new Date(today)) / 86400000);
+        allItems.push({
+          type: t.key,
+          milestoneDate,
+          fireDate,
+          daysToMilestone,
+          overdue: milestoneDate < today,
+          name: e.name,
+          store: e.store || '',
+          jobType: e.jobType || '',
+          employmentType: e.employmentType || '',
+          id: e.id,
+        });
+      }
+    }
+  }
+
+  // 統計バー
+  const convCount    = allItems.filter(i => i.type === '正社員転換').length;
+  const careerCount  = allItems.filter(i => i.type === 'キャリアアップ助成金').length;
+  const ph2yCount    = allItems.filter(i => i.type === '薬剤師2年目').length;
+  const overdueCount = allItems.filter(i => i.overdue).length;
+  document.getElementById('careerupStats').innerHTML =
+    `<div class="stat-card"><div class="label">対象合計</div><div class="value">${allItems.length}</div></div>` +
+    `<div class="stat-card"><div class="label">正社員転換</div><div class="value">${convCount}</div></div>` +
+    `<div class="stat-card"><div class="label">キャリアアップ助成金</div><div class="value">${careerCount}</div></div>` +
+    `<div class="stat-card"><div class="label">薬剤師2年目</div><div class="value">${ph2yCount}</div></div>` +
+    (overdueCount > 0 ? `<div class="stat-card" style="border-left:3px solid var(--color-danger);"><div class="label">超過中</div><div class="value" style="color:var(--color-danger);">${overdueCount}</div></div>` : '');
+
+  // フィルタ適用
+  let filtered = allItems;
+  if (typeFilter) filtered = filtered.filter(i => i.type === typeFilter);
+  if (storeFilter) filtered = filtered.filter(i => i.store === storeFilter);
+
+  if (filtered.length === 0) {
+    document.getElementById('careerupContent').innerHTML = '<p style="color:var(--color-text-sub);padding:20px;">対象者はいません</p>';
+    document.getElementById('careerupCount').textContent = '0件';
+    return;
+  }
+
+  // 種別グルーピング・各グループ内は発火予定日の昇順
+  const groups = typeFilter ? [typeFilter] : ['正社員転換', 'キャリアアップ助成金', '薬剤師2年目'];
+  let html = '';
+  for (const group of groups) {
+    const groupItems = filtered.filter(i => i.type === group)
+      .sort((a, b) => a.fireDate.localeCompare(b.fireDate));
+    if (groupItems.length === 0) continue;
+    html += `<h3 style="font-size:15px;font-weight:600;color:var(--color-primary-dark);margin:16px 0 8px;padding-left:4px;">${esc(group)}（${groupItems.length}名）</h3>`;
+    html += '<div class="reminder-cards">';
+    for (const item of groupItems) {
+      const daysLabel = item.daysToMilestone < 0
+        ? `節目${Math.abs(item.daysToMilestone)}日超過`
+        : item.daysToMilestone === 0 ? '節目: 本日'
+        : `節目まであと${item.daysToMilestone}日`;
+      const milestoneSt = dateStatus(item.milestoneDate, today);
+      html += `<div class="reminder-card ${item.overdue ? 'overdue' : ''}">
+  <div class="type">${esc(item.type)}</div>
+  <div class="name clickable" onclick="openModal('${item.id}')">${esc(item.name)}</div>
+  <div class="detail">${esc(item.store)}${item.jobType ? ' / ' + esc(item.jobType) : ''}${item.employmentType ? ' / ' + esc(item.employmentType) : ''}</div>
+  <div class="detail">節目日: ${esc(item.milestoneDate)} &nbsp; 発火: ${esc(item.fireDate)}</div>
+  <div class="date ${milestoneSt.cls}">${daysLabel}</div>
+</div>`;
+    }
+    html += '</div>';
+  }
+
+  document.getElementById('careerupContent').innerHTML = html;
+  document.getElementById('careerupCount').textContent = `${filtered.length}件表示 / 全${allItems.length}件`;
 }
 
 // ===== CSVインポート =====
