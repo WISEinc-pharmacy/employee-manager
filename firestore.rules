@@ -30,5 +30,10 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
+
+    // governance collection (情報セキュリティ・ガバナンス台帳) — 管理者のみ
+    match /governance/{docId} {
+      allow read, write: if isAdmin();
+    }
   }
 }
