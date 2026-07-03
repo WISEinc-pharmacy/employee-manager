@@ -160,6 +160,7 @@ body.role-viewer .sensitive-col { display: none !important; }
     <div class="tab active" data-tab="employees" onclick="switchTab('employees')">社員一覧</div>
     <div class="tab" data-tab="reminders" onclick="switchTab('reminders')">リマインド <span id="reminderBadge" class="tab-badge" style="display:none;">0</span></div>
     <div class="tab" data-tab="careerup" onclick="switchTab('careerup')">キャリアアップ管理</div>
+    <div class="tab" data-tab="sync" onclick="switchTab('sync')">連携（freee/KOT）</div>
     <div class="tab" data-tab="users" onclick="switchTab('users')">ユーザー管理</div>
   </div>
 
@@ -188,7 +189,7 @@ body.role-viewer .sensitive-col { display: none !important; }
           <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>勤続年数</th><th>年齢</th><th>ステータス</th>
           <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
-          <th>KOT番号</th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
+          <th>KOT番号</th><th class="sensitive-col">残業(先月)</th><th class="sensitive-col">有給取得率</th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
           <th>Drive</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
@@ -246,6 +247,12 @@ body.role-viewer .sensitive-col { display: none !important; }
     </div>
     <div id="careerupContent"></div>
     <div style="margin-top:12px;color:var(--color-text-sub);font-size:13px;" id="careerupCount"></div>
+  </div>
+
+  <!-- ===== 連携（freee/KOT突合）タブ ===== -->
+  <div id="tab-sync" class="container" style="display:none;">
+    <div class="stats-bar" id="syncStats"></div>
+    <div id="syncContent"></div>
   </div>
 </div>
 
@@ -392,6 +399,10 @@ function applyPermissions() {
   document.querySelectorAll('[data-tab="users"]').forEach(el => {
     el.style.display = userRole === 'admin' ? '' : 'none';
   });
+  // 連携タブ（freee/KOT突合）はeditor以上のみ
+  document.querySelectorAll('[data-tab="sync"]').forEach(el => {
+    el.style.display = canEdit ? '' : 'none';
+  });
 }
 
 // ===== タブ切り替え =====
@@ -401,6 +412,7 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).style.display = '';
   if (tab === 'users' && userRole === 'admin') loadUsers();
   if (tab === 'careerup') renderCareerup();
+  if (tab === 'sync') renderSyncTab();
 }
 
 // ===== 社員データ =====
@@ -478,6 +490,8 @@ function renderTable() {
       <td>${esc(e.pharmacistLicenseNo)}</td>
       <td>${esc(e.licenseExpiry)}</td>
       <td>${esc(e.kotNumber)}</td>
+      <td class="sensitive-col">${fmtOvertime(e.kotSync)}</td>
+      <td class="sensitive-col">${fmtPaidLeave(e.kotSync)}</td>
       <td>${esc(e.hasKot)}</td>
       <td>${esc(e.hasTimes)}</td>
       <td>${esc(e.hasMusubi)}</td>
@@ -501,6 +515,91 @@ function dateStatus(dateStr, today) {
   const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
   if (dateStr <= in30) return { text: dateStr + ' (間近)', cls: 'upcoming' };
   return { text: dateStr, cls: '' };
+}
+
+// ===== 連携（freee/KOT）表示ヘルパー =====
+function fmtOvertime(k) {
+  if (!k || k.overtimeMinutes == null) return '';
+  return (k.overtimeMinutes / 60).toFixed(1) + 'h';
+}
+function fmtPaidLeave(k) {
+  const p = k && k.paidLeave;
+  if (!p || p.rate == null) return '';
+  return `${p.rate}% (${p.obtained}/${p.granted}日)`;
+}
+
+async function renderSyncTab() {
+  const content = document.getElementById('syncContent');
+  let r = null;
+  try {
+    const doc = await db.collection('sync_reports').doc('freee_kot_latest').get();
+    r = doc.exists ? doc.data() : null;
+  } catch (e) {
+    content.innerHTML = `<p style="color:var(--color-text-sub);">突合レポートを読み込めませんでした: ${esc(e.message)}</p>`;
+    return;
+  }
+  if (!r) {
+    document.getElementById('syncStats').innerHTML = '';
+    content.innerHTML = '<p style="color:var(--color-text-sub);">突合レポートがまだありません。夜間同期の初回実行後に表示されます。</p>';
+    return;
+  }
+  const c = r.counts || {};
+  const issues = ['freeeOnly', 'toolActiveNotInFreee', 'freeeRetiredToolActive', 'kotOnly', 'ambiguous']
+    .reduce((n, key) => n + ((r[key] || []).length), 0);
+  document.getElementById('syncStats').innerHTML = `
+    <div class="stat-card"><div class="label">最終同期</div><div class="value" style="font-size:15px;">${esc((r.syncedAt || '').slice(0, 16).replace('T', ' '))}</div></div>
+    <div class="stat-card"><div class="label">freee在籍</div><div class="value">${c.freeeActive ?? '-'}</div></div>
+    <div class="stat-card"><div class="label">KOT登録</div><div class="value">${c.kot ?? '-'}</div></div>
+    <div class="stat-card"><div class="label">ツール在籍</div><div class="value">${c.toolActive ?? '-'}</div></div>
+    <div class="stat-card"><div class="label">要対応</div><div class="value" style="${issues ? 'color:var(--color-danger,#d33)' : ''}">${issues}</div></div>
+  `;
+  const section = (title, desc, rows, fmt) => {
+    if (!rows || !rows.length) return `
+      <div class="form-section"><h4>${title} <span style="color:#2a9d5c;font-weight:normal;">0件 ✓</span></h4></div>`;
+    return `
+      <div class="form-section">
+        <h4>${title} <span style="color:var(--color-danger,#d33);">${rows.length}件</span></h4>
+        <p style="color:var(--color-text-sub);font-size:13px;margin:4px 0 8px;">${desc}</p>
+        <ul style="margin:0;padding-left:20px;">${rows.map(x => `<li>${fmt(x)}</li>`).join('')}</ul>
+      </div>`;
+  };
+  content.innerHTML = `
+    <p style="color:var(--color-text-sub);font-size:13px;">
+      freee人事労務・KOT・本ツールの3者を突合した結果です（勤怠対象月: ${esc(r.month || '')} / 有給: ${esc(String(r.year || ''))}年）。
+      毎晩の自動同期で更新されます。
+    </p>
+    ${section('freeeに在籍・ツール未登録', 'freee人事労務に在籍しているのに本ツールに登録がない社員。ツールへの登録が必要です。',
+      r.freeeOnly, x => `${esc(x.name)}（社員番号: ${esc(x.num)} / 入社: ${esc(x.entryDate)}）`)}
+    ${section('ツール在籍・freee未登録', '本ツールで在籍扱いなのにfreeeに見つからない社員。ステータスの見直しか氏名/KOT番号の確認が必要です。',
+      r.toolActiveNotInFreee, x => `${esc(x.name)}（${esc(x.store)}）`)}
+    ${section('freee退職済・ツール在籍のまま', 'freeeでは退職済みなのに本ツールのステータスが在籍のままの社員。ステータス更新が必要です。',
+      r.freeeRetiredToolActive, x => `${esc(x.name)}（${esc(x.store)} / freee退職日: ${esc(x.retireDate)}）`)}
+    ${section('KOTに登録・ツールに紐付け不可', 'KOTにいるのに本ツールの社員と紐付けできなかった従業員。KOT番号か氏名表記の確認が必要です。',
+      r.kotOnly, x => `${esc(x.name)}（KOTコード: ${esc(x.code)} / ${esc(x.division)}）`)}
+    ${section('自動確定できない照合（要人間確認）', '同姓同名などで自動照合を確定できなかったもの。該当社員のKOT番号欄に社員番号を入力すると解消します。',
+      r.ambiguous, x => `[${esc(x.source)}] ${esc(x.name)}（${esc(x.num)}）`)}
+  `;
+}
+
+function renderSyncInfo(e) {
+  const f = e.freeeSync, k = e.kotSync;
+  if (!f && !k) return '';
+  const item = (label, val) => val ? `<div><span style="color:var(--color-text-sub);">${label}:</span> ${esc(String(val))}</div>` : '';
+  return `
+    <div class="form-section" style="background:#f5f9ff;border-radius:8px;padding:10px 14px;">
+      <h4>連携情報（自動同期・読み取り専用）</h4>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:13px;">
+        <div>
+          <strong>freee人事労務</strong>
+          ${f ? item('社員番号', f.num) + item('入社日', f.entryDate) + item('退職日', f.retireDate) + item('メール', f.email) : '<div style="color:var(--color-text-sub);">未連携</div>'}
+        </div>
+        <div>
+          <strong>KOT勤怠</strong>
+          ${k ? item('コード', k.code) + item('所属', k.divisionName) + item(`残業(${k.month || '先月'})`, fmtOvertime(k)) + item('出勤日数', k.workingCount) + item('有給取得', fmtPaidLeave(k)) : '<div style="color:var(--color-text-sub);">未連携</div>'}
+        </div>
+      </div>
+      <div style="color:var(--color-text-sub);font-size:12px;margin-top:6px;">最終同期: ${esc(((f && f.syncedAt) || (k && k.syncedAt) || '').slice(0, 16).replace('T', ' '))}</div>
+    </div>`;
 }
 
 function getLeaveText(e) {
@@ -547,6 +646,8 @@ function openModal(id) {
         <div class="form-group"><label>ステータス</label><select id="f_status"><option ${(e.status||'在籍')==='在籍'?'selected':''}>在籍</option><option ${e.status==='休職'?'selected':''}>休職</option><option ${e.status==='退職'?'selected':''}>退職</option></select></div>
       </div>
     </div>
+
+    ${renderSyncInfo(e)}
 
     <div class="form-section">
       <h4>個人情報</h4>

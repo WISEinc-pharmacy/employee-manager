@@ -35,5 +35,11 @@ service cloud.firestore {
     match /governance/{docId} {
       allow read, write: if isAdmin();
     }
+
+    // sync_reports (freee/KOT夜間同期の突合レポート) — 閲覧editor以上・書き込みはAdmin SDKバッチのみ
+    match /sync_reports/{docId} {
+      allow read: if isEditorOrAdmin();
+      allow write: if false;
+    }
   }
 }
