@@ -38,6 +38,8 @@ body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sa
 .btn-danger { background: var(--color-danger); color: #fff; }
 .btn-outline { background: transparent; border: 1px solid var(--color-border); color: var(--color-text); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.menu-item { padding: 10px 16px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.menu-item:hover { background: #f0f7ff; }
 
 /* ===== 認証画面 ===== */
 #authScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; }
@@ -60,7 +62,13 @@ body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sa
 .toolbar .spacer { flex: 1; }
 
 /* ===== テーブル ===== */
-.table-wrap { overflow: auto; max-height: calc(100vh - 118px); background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.table-wrap { overflow: auto; max-height: calc(100vh - 118px); background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overscroll-behavior-x: contain; }
+/* 横スクロールバーを常に見える太さにする（ノートPCでの操作性） */
+.table-wrap::-webkit-scrollbar { height: 14px; width: 12px; }
+.table-wrap::-webkit-scrollbar-thumb { background: #8fa6ba; border-radius: 7px; border: 2px solid #eef1f5; }
+.table-wrap::-webkit-scrollbar-thumb:hover { background: #5d7d9a; }
+.table-wrap::-webkit-scrollbar-track { background: #eef1f5; }
+.table-wrap::-webkit-scrollbar-corner { background: #eef1f5; }
 .table-wrap table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .table-wrap thead th { background: #2c3e50; color: #fff; padding: 10px 12px; text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-weight: 500; }
 .table-wrap tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; background: var(--color-surface); }
@@ -182,9 +190,16 @@ body.role-viewer .sensitive-col { display: none !important; }
         <option value="退職">退職</option>
       </select>
       <div class="spacer"></div>
-      <button class="btn btn-primary" id="btnAdd" onclick="openModal()">+ 社員追加</button>
-      <button class="btn btn-warn" id="btnImport" onclick="openImportModal()">CSVインポート</button>
+      <button class="btn btn-outline" onclick="scrollEmpTable(-1)" title="表を左へスクロール">◀</button>
+      <button class="btn btn-outline" onclick="scrollEmpTable(1)" title="表を右へスクロール">▶</button>
       <button class="btn btn-outline" onclick="exportCSV()">CSVエクスポート</button>
+      <div id="moreMenuWrap" style="position:relative;">
+        <button class="btn btn-outline" onclick="toggleMoreMenu(event)" title="その他の操作">⋯</button>
+        <div id="moreMenu" style="display:none; position:absolute; right:0; top:calc(100% + 4px); background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:50; min-width:170px; overflow:hidden;">
+          <div class="menu-item" id="btnAdd" onclick="openModal()">＋ 社員追加</div>
+          <div class="menu-item" id="btnImport" onclick="openImportModal()">CSVインポート</div>
+        </div>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -454,8 +469,8 @@ async function checkUserRole(user) {
 function applyPermissions() {
   const canEdit = userRole === 'admin' || userRole === 'editor';
   document.body.classList.toggle('role-viewer', userRole === 'viewer');
-  document.getElementById('btnAdd').style.display = canEdit ? '' : 'none';
-  document.getElementById('btnImport').style.display = canEdit ? '' : 'none';
+  // 社員追加/CSVインポートは⋯メニュー内（editor以上のみメニュー自体を表示）
+  document.getElementById('moreMenuWrap').style.display = canEdit ? '' : 'none';
   // ユーザー管理はadminのみ（ヘッダーボタン）
   document.getElementById('btnUserMgmt').style.display = userRole === 'admin' ? '' : 'none';
   // 連携タブ（freee/KOT突合）はeditor以上のみ
@@ -467,6 +482,36 @@ function applyPermissions() {
 function openHelpModal() {
   document.getElementById('helpModal').classList.add('show');
 }
+
+// ===== 表の横スクロール補助 =====
+function scrollEmpTable(dir) {
+  const w = document.querySelector('#tab-employees .table-wrap');
+  w.scrollBy({ left: dir * w.clientWidth * 0.7, behavior: 'smooth' });
+}
+// タッチパッド2本指横スワイプ/Shift+ホイールを確実に横スクロールに割り当てる
+// （環境によってはdeltaXが横スクロールに反映されないため）
+document.querySelectorAll('.table-wrap').forEach(w => {
+  w.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      w.scrollLeft += e.deltaX;
+      e.preventDefault();
+    } else if (e.shiftKey && e.deltaY) {
+      w.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
+});
+
+// ===== ⋯メニュー（社員追加/CSVインポートの裏メニュー） =====
+function toggleMoreMenu(e) {
+  e.stopPropagation();
+  const m = document.getElementById('moreMenu');
+  m.style.display = m.style.display === 'none' ? '' : 'none';
+}
+document.addEventListener('click', () => {
+  const m = document.getElementById('moreMenu');
+  if (m) m.style.display = 'none';
+});
 
 // ===== タブ切り替え =====
 function switchTab(tab) {
