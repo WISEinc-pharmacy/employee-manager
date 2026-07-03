@@ -24,7 +24,7 @@
 body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif; background: var(--color-bg); color: var(--color-text); font-size: 14px; }
 
 /* ===== ヘッダー ===== */
-.header { background: #1a5276; color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.header { background: #1a5276; color: #fff; height: 50px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 90; }
 .header h1 { font-size: 18px; font-weight: 600; }
 .header-right { display: flex; align-items: center; gap: 8px; }
 .header-right span { font-size: 13px; opacity: 0.9; margin-right: 4px; }
@@ -46,7 +46,7 @@ body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sa
 #loginBtn { padding: 12px 32px; font-size: 16px; }
 
 /* ===== タブ ===== */
-.tabs { display: flex; background: var(--color-surface); border-bottom: 2px solid var(--color-border); padding: 0 24px; position: sticky; top: 50px; z-index: 99; }
+.tabs { display: flex; background: var(--color-surface); border-bottom: 2px solid var(--color-border); padding: 0 24px; position: sticky; top: 50px; z-index: 89; }
 .tab { padding: 12px 24px; cursor: pointer; font-weight: 500; color: var(--color-text-sub); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
 .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
 .tab:hover { color: var(--color-text); }
@@ -60,16 +60,16 @@ body { font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sa
 .toolbar .spacer { flex: 1; }
 
 /* ===== テーブル ===== */
-.table-wrap { overflow-x: auto; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-thead th { background: #2c3e50; color: #fff; padding: 10px 12px; text-align: left; white-space: nowrap; position: sticky; top: 94px; z-index: 2; font-weight: 500; }
-tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; background: var(--color-surface); }
+.table-wrap { overflow: auto; max-height: calc(100vh - 118px); background: var(--color-surface); border-radius: var(--radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.table-wrap table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.table-wrap thead th { background: #2c3e50; color: #fff; padding: 10px 12px; text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 2; font-weight: 500; }
+.table-wrap tbody td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); white-space: nowrap; background: var(--color-surface); }
 /* 氏名列を横スクロール時に左固定（ヘッダーは既にtop固定） */
-thead th:first-child, tbody td:first-child { position: sticky; left: 0; }
-thead th:first-child { z-index: 3; }
-tbody td:first-child { z-index: 1; box-shadow: 1px 0 0 var(--color-border); font-weight: 500; }
-tbody tr:hover td { background: #f0f7ff; }
-tbody tr.leave-active td { background: #fef3c7; }
+.table-wrap thead th:first-child, .table-wrap tbody td:first-child { position: sticky; left: 0; }
+.table-wrap thead th:first-child { z-index: 3; }
+.table-wrap tbody td:first-child { z-index: 1; box-shadow: 1px 0 0 var(--color-border); font-weight: 500; }
+.table-wrap tbody tr:hover td { background: #f0f7ff; }
+.table-wrap tbody tr.leave-active td { background: #fef3c7; }
 .cell-clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 /* 最機微項目（口座・生年月日・マイナンバー）はviewerには非表示。admin/editorは表示 */
 body.role-viewer .sensitive-col { display: none !important; }
@@ -317,7 +317,7 @@ body.role-viewer .sensitive-col { display: none !important; }
 </div>
 
 <!-- ===== 使い方モーダル ===== -->
-<div class="modal-overlay" id="helpModal" style="align-items:flex-start; padding-top:40px;">
+<div class="modal-overlay" id="helpModal">
   <div class="modal" style="max-width:700px;">
     <div class="modal-header">
       <h3>使い方・権限について</h3>
@@ -465,8 +465,7 @@ function applyPermissions() {
 }
 
 function openHelpModal() {
-  const m = document.getElementById('helpModal');
-  m.style.display = 'flex';
+  document.getElementById('helpModal').classList.add('show');
 }
 
 // ===== タブ切り替え =====
