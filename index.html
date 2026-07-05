@@ -397,6 +397,21 @@ body.role-viewer .sensitive-col { display: none !important; }
   </div>
 </div>
 
+<!-- ===== HR スレッド確認モーダル ===== -->
+<div class="modal-overlay" id="hrThreadModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>通知先スレッドの確認</h3>
+      <button class="modal-close" onclick="closeModal('hrThreadModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="hrThreadModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('hrThreadModal')">キャンセル</button>
+      <button class="btn btn-primary" id="btnSaveHrThreadUrl" onclick="saveHrThreadUrl()">URLで保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Firebase SDK ===== -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -419,6 +434,7 @@ let employees = [];
 let reminders = [];
 let importRecords = [];
 let editingId = null;
+let editingHrThreadId = null;
 
 // ===== 認証 =====
 function doLogin() {
@@ -1055,6 +1071,22 @@ function renderReminders() {
   document.getElementById('reminderCount').textContent = `${list.length}件`;
 }
 
+// ===== HR スレッド ステータス表示 =====
+function hrThreadStatusHtml(item) {
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  const baseUrl = 'https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p';
+  if (item.hrThreadConfirmed && item.hrThreadTs) {
+    const url = baseUrl + item.hrThreadTs.replace('.', '');
+    return `✅ <a href="${esc(url)}" target="_blank" rel="noopener" style="font-size:12px;">確認済み</a>`;
+  }
+  if (item.hrThreadTsDraft) {
+    const btn = canEdit ? ` <button class="btn btn-outline btn-sm" onclick="openHrThreadModal('${esc(item.id)}')">確認する</button>` : '';
+    return `📝 下書きあり${btn}`;
+  }
+  const btn = canEdit ? ` <button class="btn btn-outline btn-sm" onclick="openHrThreadModal('${esc(item.id)}')">設定する</button>` : '';
+  return `未リンク${btn}`;
+}
+
 // ===== キャリアアップ管理 =====
 function renderCareerup() {
   const today = new Date().toISOString().slice(0, 10);
@@ -1111,6 +1143,10 @@ function renderCareerup() {
           jobType: e.jobType || '',
           employmentType: e.employmentType || '',
           id: e.id,
+          hrThreadTs: e.hrThreadTs || null,
+          hrThreadConfirmed: e.hrThreadConfirmed || false,
+          hrThreadTsDraft: e.hrThreadTsDraft || null,
+          hrThreadMatchBy: e.hrThreadMatchBy || null,
         });
       }
     }
@@ -1160,6 +1196,7 @@ function renderCareerup() {
   <div class="detail">${esc(item.store)}${item.jobType ? ' / ' + esc(item.jobType) : ''}${item.employmentType ? ' / ' + esc(item.employmentType) : ''}</div>
   <div class="detail">節目日: ${esc(item.milestoneDate)} &nbsp; 発火: ${esc(item.fireDate)}</div>
   <div class="date ${milestoneSt.cls}">${daysLabel}</div>
+  <div class="detail" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">通知先: ${hrThreadStatusHtml(item)}</div>
 </div>`;
     }
     html += '</div>';
@@ -1167,6 +1204,138 @@ function renderCareerup() {
 
   document.getElementById('careerupContent').innerHTML = html;
   document.getElementById('careerupCount').textContent = `${filtered.length}件表示 / 全${allItems.length}件`;
+}
+
+// ===== HR スレッド 確認モーダル =====
+function openHrThreadModal(id) {
+  const emp = employees.find(e => e.id === id);
+  if (!emp) return;
+  editingHrThreadId = id;
+
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  const baseUrl = 'https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p';
+
+  let html = `<p style="font-weight:600;font-size:15px;margin-bottom:4px;">${esc(emp.name)}</p>`;
+  html += `<p style="color:var(--color-text-sub);font-size:13px;margin-bottom:16px;">${esc(emp.store || '')}</p>`;
+
+  if (emp.hrThreadTsDraft) {
+    const draftUrl = baseUrl + emp.hrThreadTsDraft.replace('.', '');
+    html += `<div style="background:#f0f4ff;border-radius:6px;padding:12px;margin-bottom:16px;">`;
+    html += `<p style="font-size:13px;font-weight:600;margin-bottom:4px;">📝 自動照合による推測スレッド</p>`;
+    html += `<p style="font-size:13px;color:var(--color-text-sub);margin-bottom:6px;">照合方法: ${esc(emp.hrThreadMatchBy || '—')}</p>`;
+    html += `<a href="${esc(draftUrl)}" target="_blank" rel="noopener" style="font-size:12px;word-break:break-all;">${esc(draftUrl)}</a>`;
+    if (canEdit) {
+      html += `<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="confirmHrThreadDraft()">このスレッドで確定</button></div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (canEdit) {
+    html += `<div class="form-group" style="margin-bottom:4px;">`;
+    html += `<label style="font-size:13px;display:block;margin-bottom:4px;">SlackスレッドURL（手動入力）</label>`;
+    html += `<input type="url" id="hrThreadUrlInput" placeholder="https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p..." style="width:100%;box-sizing:border-box;">`;
+    html += `</div>`;
+    html += `<p id="hrThreadUrlError" style="color:var(--color-danger);font-size:12px;margin-bottom:4px;display:none;"></p>`;
+    if (emp.hrThreadTs || emp.hrThreadTsDraft) {
+      html += `<div style="margin-top:10px;"><button class="btn btn-outline btn-sm" style="color:var(--color-danger);border-color:var(--color-danger);" onclick="clearHrThread()">リンク解除</button></div>`;
+    }
+  }
+
+  document.getElementById('hrThreadModalBody').innerHTML = html;
+  document.getElementById('btnSaveHrThreadUrl').style.display = canEdit ? '' : 'none';
+  document.getElementById('hrThreadModal').classList.add('show');
+}
+
+async function confirmHrThreadDraft() {
+  if (!editingHrThreadId) return;
+  const emp = employees.find(e => e.id === editingHrThreadId);
+  if (!emp || !emp.hrThreadTsDraft) return;
+  try {
+    await db.collection('employees').doc(editingHrThreadId).update({
+      hrThreadTs: emp.hrThreadTsDraft,
+      hrThreadConfirmed: true,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email,
+    });
+    emp.hrThreadTs = emp.hrThreadTsDraft;
+    emp.hrThreadConfirmed = true;
+    closeModal('hrThreadModal');
+    renderCareerup();
+  } catch (e) {
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+function parseTsFromSlackUrl(url) {
+  const m = url.match(/\/archives\/C06PBEXSJSG\/p(\d{16})/);
+  if (!m) return null;
+  return m[1].slice(0, 10) + '.' + m[1].slice(10);
+}
+
+async function saveHrThreadUrl() {
+  if (!editingHrThreadId) return;
+  const input = document.getElementById('hrThreadUrlInput');
+  const errEl = document.getElementById('hrThreadUrlError');
+  const url = (input ? input.value : '').trim();
+
+  if (!url) {
+    errEl.textContent = 'URLを入力してください';
+    errEl.style.display = '';
+    return;
+  }
+  if (!url.includes('C06PBEXSJSG')) {
+    errEl.textContent = '対象チャンネル（C06PBEXSJSG）のURLではありません';
+    errEl.style.display = '';
+    return;
+  }
+  const ts = parseTsFromSlackUrl(url);
+  if (!ts) {
+    errEl.textContent = 'URLの形式が正しくありません（例: ...C06PBEXSJSG/p1711586950281229）';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  try {
+    await db.collection('employees').doc(editingHrThreadId).update({
+      hrThreadTs: ts,
+      hrThreadConfirmed: true,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email,
+    });
+    const emp = employees.find(e => e.id === editingHrThreadId);
+    if (emp) { emp.hrThreadTs = ts; emp.hrThreadConfirmed = true; }
+    closeModal('hrThreadModal');
+    renderCareerup();
+  } catch (e) {
+    errEl.textContent = '保存に失敗しました: ' + e.message;
+    errEl.style.display = '';
+  }
+}
+
+async function clearHrThread() {
+  if (!editingHrThreadId) return;
+  if (!confirm('このスレッドのリンクを解除しますか？')) return;
+  try {
+    await db.collection('employees').doc(editingHrThreadId).update({
+      hrThreadTs: firebase.firestore.FieldValue.delete(),
+      hrThreadConfirmed: firebase.firestore.FieldValue.delete(),
+      hrThreadTsDraft: firebase.firestore.FieldValue.delete(),
+      hrThreadMatchBy: firebase.firestore.FieldValue.delete(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email,
+    });
+    const emp = employees.find(e => e.id === editingHrThreadId);
+    if (emp) {
+      delete emp.hrThreadTs;
+      delete emp.hrThreadConfirmed;
+      delete emp.hrThreadTsDraft;
+      delete emp.hrThreadMatchBy;
+    }
+    closeModal('hrThreadModal');
+    renderCareerup();
+  } catch (e) {
+    alert('解除に失敗しました: ' + e.message);
+  }
 }
 
 // ===== CSVインポート =====
