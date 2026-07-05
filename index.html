@@ -144,6 +144,12 @@ body.role-viewer .sensitive-col { display: none !important; }
 .user-list { list-style: none; }
 .user-list li { padding: 10px 0; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 12px; }
 .user-list li:last-child { border-bottom: none; }
+
+/* ===== ソースバッジ（freee/KOT/手入力） ===== */
+.src-badge { display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px; vertical-align:middle; font-weight:600; }
+.src-freee { background:#1a73e8; color:#fff; }
+.src-kot { background:#2a9d5c; color:#fff; }
+.src-manual { background:#999; color:#fff; }
 </style>
 </head>
 <body>
@@ -207,7 +213,7 @@ body.role-viewer .sensitive-col { display: none !important; }
           <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>勤続年数</th><th>年齢</th><th>ステータス</th>
           <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
-          <th>KOT番号</th><th class="sensitive-col">残業(先月)</th><th class="sensitive-col">有給取得率</th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
+          <th>KOT番号</th><th class="sensitive-col">残業(先月)<span class="src-badge src-kot">KOT</span></th><th class="sensitive-col">有給取得率<span class="src-badge src-kot">KOT</span></th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
           <th>Drive</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
@@ -363,6 +369,8 @@ body.role-viewer .sensitive-col { display: none !important; }
         </tbody>
       </table>
 
+      <div id="helpDataSources" style="margin-bottom:20px;"></div>
+
       <h4 style="margin:0 0 10px; color:#1a5276;">権限一覧</h4>
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead><tr style="background:#1a5276; color:#fff;">
@@ -479,7 +487,43 @@ function applyPermissions() {
   });
 }
 
+const FIELD_SOURCES = [
+  { label: '残業(先月)',                       source: 'kot',    note: 'KOTの先月実績。毎晩自動更新' },
+  { label: '有給取得率',                       source: 'kot',    note: '当年度の取得/付与。繰越消化で100%超あり' },
+  { label: '出勤日数',                         source: 'kot',    note: 'モーダル連携情報に表示' },
+  { label: '所属(KOT)',                        source: 'kot',    note: 'モーダル連携情報に表示' },
+  { label: '社員番号',                         source: 'freee',  note: 'freeeのnum。KOTコードと同一' },
+  { label: '入社日(freee)',                    source: 'freee',  note: 'モーダル連携情報に表示。手入力の入社日と重複あり・freeeが正' },
+  { label: '退職日(freee)',                    source: 'freee',  note: '同上' },
+  { label: '会社メール(freee)',                source: 'freee',  note: '同上' },
+  { label: '氏名・店舗・役職・資格・貸与物 ほか', source: 'manual', note: 'このツールで手入力（freee/KOTにない独自項目）' },
+];
+
 function openHelpModal() {
+  const el = document.getElementById('helpDataSources');
+  if (el && !el.dataset.filled) {
+    const srcLabel = {
+      freee: '<span class="src-badge src-freee">freee</span>',
+      kot:   '<span class="src-badge src-kot">KOT</span>',
+      manual:'<span class="src-badge src-manual">手入力</span>'
+    };
+    el.innerHTML = `
+      <h4 style="margin:0 0 10px; color:#1a5276;">データの出どころ</h4>
+      <p style="margin:0 0 10px; font-size:13px; color:#444;">freee・KOT由来のデータは毎晩22:45に自動同期されます。手入力項目はこのツールが原本です</p>
+      <table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:20px;">
+        <thead><tr style="background:#f0f2f5;">
+          <th style="padding:8px 10px; text-align:left; border:1px solid #ddd;">項目</th>
+          <th style="padding:8px 10px; text-align:left; border:1px solid #ddd;">出どころ</th>
+          <th style="padding:8px 10px; text-align:left; border:1px solid #ddd;">説明</th>
+        </tr></thead>
+        <tbody>${FIELD_SOURCES.map((f, i) => `<tr${i%2===1?' style="background:#fafafa;"':''}>
+          <td style="padding:7px 10px; border:1px solid #ddd;">${esc(f.label)}</td>
+          <td style="padding:7px 10px; border:1px solid #ddd; white-space:nowrap;">${srcLabel[f.source]||''}</td>
+          <td style="padding:7px 10px; border:1px solid #ddd;">${esc(f.note)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    el.dataset.filled = '1';
+  }
   document.getElementById('helpModal').classList.add('show');
 }
 
@@ -693,20 +737,20 @@ function renderSyncInfo(e) {
   const f = e.freeeSync, k = e.kotSync;
   if (!f && !k) return '';
   const item = (label, val) => val ? `<div><span style="color:var(--color-text-sub);">${label}:</span> ${esc(String(val))}</div>` : '';
+  const noLink = '<div style="color:var(--color-text-sub);font-style:italic;">未連携（連携タブで突合状況を確認）</div>';
   return `
     <div class="form-section" style="background:#f5f9ff;border-radius:8px;padding:10px 14px;">
       <h4>連携情報（自動同期・読み取り専用）</h4>
       <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:13px;">
         <div>
-          <strong>freee人事労務</strong>
-          ${f ? item('社員番号', f.num) + item('入社日', f.entryDate) + item('退職日', f.retireDate) + item('メール', f.email) : '<div style="color:var(--color-text-sub);">未連携</div>'}
+          <strong>freee人事労務 <span class="src-badge src-freee">freee</span></strong>
+          ${f ? item('社員番号', f.num) + item('氏名', f.displayName) + item('入社日', f.entryDate) + item('退職日', f.retireDate) + item('メール', f.email) + item('照合方法', f.matchedBy) + item('同期時刻', (f.syncedAt||'').slice(0,16).replace('T',' ')) : noLink}
         </div>
         <div>
-          <strong>KOT勤怠</strong>
-          ${k ? item('コード', k.code) + item('所属', k.divisionName) + item(`残業(${k.month || '先月'})`, fmtOvertime(k)) + item('出勤日数', k.workingCount) + item('有給取得', fmtPaidLeave(k)) : '<div style="color:var(--color-text-sub);">未連携</div>'}
+          <strong>KOT勤怠 <span class="src-badge src-kot">KOT</span></strong>
+          ${k ? item('所属', k.divisionName) + item('雇用区分', k.typeName) + item(`残業(${k.month || '先月'})`, fmtOvertime(k)) + item('出勤日数', k.workingCount) + item('有給取得', fmtPaidLeave(k)) + item('照合方法', k.matchedBy) + item('同期時刻', (k.syncedAt||'').slice(0,16).replace('T',' ')) : noLink}
         </div>
       </div>
-      <div style="color:var(--color-text-sub);font-size:12px;margin-top:6px;">最終同期: ${esc(((f && f.syncedAt) || (k && k.syncedAt) || '').slice(0, 16).replace('T', ' '))}</div>
     </div>`;
 }
 
