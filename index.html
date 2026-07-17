@@ -179,6 +179,7 @@ body.role-viewer .sensitive-col { display: none !important; }
     <div class="tab" data-tab="reminders" onclick="switchTab('reminders')">リマインド <span id="reminderBadge" class="tab-badge" style="display:none;">0</span></div>
     <div class="tab" data-tab="careerup" onclick="switchTab('careerup')">キャリアアップ管理</div>
     <div class="tab" data-tab="sync" onclick="switchTab('sync')">連携（freee/KOT）</div>
+    <div class="tab" data-tab="hrconfirm" onclick="switchTab('hrconfirm')">スレッド確認 <span id="hrconfirmBadge" class="tab-badge" style="display:none;">0</span></div>
   </div>
 
   <!-- ===== 社員一覧タブ ===== -->
@@ -277,6 +278,17 @@ body.role-viewer .sensitive-col { display: none !important; }
   <div id="tab-sync" class="container" style="display:none;">
     <div class="stats-bar" id="syncStats"></div>
     <div id="syncContent"></div>
+  </div>
+
+  <!-- ===== スレッド確認タブ ===== -->
+  <div id="tab-hrconfirm" class="container" style="display:none;">
+    <div class="stats-bar" id="hrconfirmStats"></div>
+    <div class="toolbar" style="margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="hrconfirmShowAll" onchange="renderHrConfirmTab()"> 確認済みを含む全件表示
+      </label>
+    </div>
+    <div id="hrconfirmContent"></div>
   </div>
 </div>
 
@@ -581,6 +593,7 @@ function switchTab(tab) {
   if (tab === 'users' && userRole === 'admin') loadUsers();
   if (tab === 'careerup') renderCareerup();
   if (tab === 'sync') renderSyncTab();
+  if (tab === 'hrconfirm') renderHrConfirmTab();
 }
 
 // ===== 社員データ =====
@@ -592,6 +605,7 @@ async function loadEmployees() {
   renderTable();
   renderStats();
   computeReminders();
+  renderHrConfirmTab();
 }
 
 function populateFilters() {
@@ -1343,6 +1357,211 @@ async function clearHrThread() {
     renderCareerup();
   } catch (e) {
     alert('解除に失敗しました: ' + e.message);
+  }
+}
+
+// ===== スレッド確認タブ =====
+
+function updateHrConfirmBadge() {
+  const count = employees.filter(e => e.hrThreadCandidate && !e.hrThreadConfirmed).length;
+  const badge = document.getElementById('hrconfirmBadge');
+  if (badge) {
+    badge.textContent = count;
+    badge.style.display = count > 0 ? '' : 'none';
+  }
+}
+
+function renderHrConfirmTab() {
+  updateHrConfirmBadge();
+
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  const showAll = document.getElementById('hrconfirmShowAll') && document.getElementById('hrconfirmShowAll').checked;
+
+  // 候補あり・未確認
+  const pending = employees.filter(e => e.hrThreadCandidate && !e.hrThreadConfirmed);
+  // 候補あり・確認済み
+  const confirmed = employees.filter(e => e.hrThreadCandidate && e.hrThreadConfirmed);
+  // 未紐付き（退職除く・スレッドなし・候補なし・拒否済みもなし）
+  const unlinked = employees.filter(e =>
+    (e.status || '在籍') !== '退職' &&
+    !e.hrThreadTs && !e.hrThreadConfirmed &&
+    !e.hrThreadCandidate && !(e.hrThreadRejectedTs && e.hrThreadRejectedTs.length)
+  );
+
+  const statsEl = document.getElementById('hrconfirmStats');
+  statsEl.innerHTML =
+    `<div class="stat-card"><div class="label">確認待ち</div><div class="value" style="${pending.length > 0 ? 'color:var(--color-warn)' : ''}">${pending.length}</div></div>` +
+    `<div class="stat-card"><div class="label">確認済み</div><div class="value" style="color:var(--color-success)">${employees.filter(e => e.hrThreadConfirmed).length}</div></div>` +
+    `<div class="stat-card"><div class="label">未紐付き</div><div class="value" style="${unlinked.length > 0 ? 'color:var(--color-text-sub)' : ''}">${unlinked.length}</div></div>`;
+
+  const displayList = showAll ? [...pending, ...confirmed] : pending;
+
+  let html = '';
+
+  if (displayList.length === 0 && !showAll) {
+    html += '<p style="color:var(--color-text-sub);padding:20px 0;">確認待ちのスレッドはありません。</p>';
+  } else if (displayList.length > 0) {
+    html += `
+      <div class="table-wrap" style="max-height:none;">
+        <table style="width:100%;min-width:700px;">
+          <thead><tr>
+            <th>氏名</th><th>店舗</th><th>確信度</th><th>候補スレッド</th><th>スレ数</th><th>操作</th>
+          </tr></thead>
+          <tbody>
+    `;
+    for (const e of displayList) {
+      const cand = e.hrThreadCandidate;
+      if (!cand) continue;
+      const isConfirmed = !!e.hrThreadConfirmed;
+      const confBadge = cand.conf === '高'
+        ? `<span class="status-badge" style="background:#dcfce7;color:#166534;">高</span>`
+        : `<span class="status-badge" style="background:#fef3c7;color:#92400e;" title="目視確認推奨">⚠️ 中</span>`;
+
+      let threadCell = '';
+      const threads = cand.threads || [];
+      const baseUrl = 'https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p';
+
+      if (threads.length > 1) {
+        // 複数スレッド: ラジオボタンで選択
+        threadCell = `<div style="display:flex;flex-direction:column;gap:6px;">`;
+        for (const t of threads) {
+          const url = t.url || (baseUrl + t.ts.replace('.', ''));
+          const isDefault = t.ts === cand.currentTs;
+          const radioId = `hrthread_${e.id}_${t.ts}`;
+          threadCell += `
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+              <input type="radio" name="hrthread_${esc(e.id)}" id="${radioId}" value="${esc(t.ts)}" ${isDefault ? 'checked' : ''}>
+              <a href="${esc(url)}" target="_blank">Slackで開く</a>
+              <span style="color:var(--color-text-sub);">(返信${t.reply || 0}件 / ${esc(t.conf || '')})</span>
+            </label>`;
+        }
+        threadCell += `</div>`;
+      } else {
+        const url = cand.currentUrl || (baseUrl + (cand.currentTs || '').replace('.', ''));
+        threadCell = `<a href="${esc(url)}" target="_blank">Slackで開く</a>`;
+      }
+
+      let opCell = '';
+      if (isConfirmed) {
+        opCell = `<span style="color:var(--color-success);font-weight:600;">確定済み</span>`;
+      } else if (canEdit) {
+        opCell = `
+          <button class="btn btn-success btn-sm" onclick="confirmHrThread('${esc(e.id)}', ${threads.length > 1 ? `getSelectedHrThreadTs('${esc(e.id)}')` : `'${esc(cand.currentTs)}'`})">✓ 確定</button>
+          <button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="rejectHrThread('${esc(e.id)}')">✗ 違う</button>`;
+      } else {
+        opCell = `<span style="color:var(--color-text-sub);">閲覧のみ</span>`;
+      }
+
+      html += `<tr>
+        <td style="font-weight:500;">${esc(e.name)}</td>
+        <td>${esc(e.store)}</td>
+        <td>${confBadge}</td>
+        <td>${threadCell}</td>
+        <td style="text-align:center;">${cand.threadCount || threads.length || 1}</td>
+        <td style="white-space:nowrap;">${opCell}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // 未紐付きセクション（折りたたみ）
+  if (unlinked.length > 0) {
+    html += `
+      <details style="margin-top:24px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--color-text-sub);padding:8px 0;">
+          スレッドが見つからない社員（${unlinked.length}名）
+        </summary>
+        <div style="margin-top:8px;padding:12px;background:var(--color-surface);border-radius:var(--radius-md);box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <p style="font-size:12px;color:var(--color-text-sub);margin-bottom:10px;">個別にURLを手動で登録してください（キャリアアップ管理タブ > 通知先スレッドの確認）。</p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#f0f2f5;">
+              <th style="padding:6px 10px;text-align:left;border:1px solid var(--color-border);">氏名</th>
+              <th style="padding:6px 10px;text-align:left;border:1px solid var(--color-border);">店舗</th>
+            </tr></thead>
+            <tbody>
+              ${unlinked.map((e, i) => `<tr${i % 2 === 1 ? ' style="background:#fafafa;"' : ''}>
+                <td style="padding:5px 10px;border:1px solid var(--color-border);">${esc(e.name)}</td>
+                <td style="padding:5px 10px;border:1px solid var(--color-border);">${esc(e.store)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>`;
+  }
+
+  document.getElementById('hrconfirmContent').innerHTML = html;
+}
+
+function getSelectedHrThreadTs(empId) {
+  const radios = document.querySelectorAll(`input[name="hrthread_${empId}"]`);
+  for (const r of radios) {
+    if (r.checked) return r.value;
+  }
+  // フォールバック: candidateのcurrentTs
+  const emp = employees.find(e => e.id === empId);
+  return emp && emp.hrThreadCandidate ? emp.hrThreadCandidate.currentTs : null;
+}
+
+async function confirmHrThread(empId, chosenTs) {
+  if (!chosenTs) return alert('スレッドが選択されていません');
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  if (!canEdit) return;
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const candidate = emp.hrThreadCandidate;
+  if (!candidate) return;
+
+  const threads = candidate.threads || [];
+  const olderThreads = threads.filter(t => t.ts !== chosenTs);
+  const histEntries = olderThreads.map(t => ({
+    ts: t.ts,
+    count: t.reply,
+    closedAt: new Date().toISOString(),
+    source: 'ayumi',
+    confirmedBy: currentUser.email,
+    confirmedAt: new Date().toISOString().slice(0, 10),
+  }));
+
+  const updates = {
+    hrThreadTs: chosenTs,
+    hrThreadConfirmed: true,
+    hrProfileSource: `prev_thread:${chosenTs} (confirmed by management ${new Date().toISOString().slice(0, 10)})`,
+    hrThreadCandidate: firebase.firestore.FieldValue.delete(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: currentUser.email,
+  };
+  if (histEntries.length > 0) {
+    updates.hrThreadHistory = firebase.firestore.FieldValue.arrayUnion(...histEntries);
+  }
+
+  try {
+    await db.collection('employees').doc(empId).update(updates);
+    emp.hrThreadTs = chosenTs;
+    emp.hrThreadConfirmed = true;
+    delete emp.hrThreadCandidate;
+    renderHrConfirmTab();
+  } catch (e) {
+    alert('保存に失敗しました: ' + e.message);
+  }
+}
+
+async function rejectHrThread(empId) {
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  if (!canEdit) return;
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  const ts = emp.hrThreadCandidate && emp.hrThreadCandidate.currentTs;
+  try {
+    await db.collection('employees').doc(empId).update({
+      hrThreadCandidate: firebase.firestore.FieldValue.delete(),
+      ...(ts ? { hrThreadRejectedTs: firebase.firestore.FieldValue.arrayUnion(ts) } : {}),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email,
+    });
+    delete emp.hrThreadCandidate;
+    renderHrConfirmTab();
+  } catch (e) {
+    alert('操作に失敗しました: ' + e.message);
   }
 }
 
