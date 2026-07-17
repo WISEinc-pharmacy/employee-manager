@@ -834,6 +834,16 @@ function openModal(id) {
     </div>
 
     <div class="form-section">
+      <h4>採用条件</h4>
+      <div class="form-grid form-grid-3">
+        <div class="form-group"><label>転換後の予定雇用形態</label><input type="text" id="f_conversionPlannedType" value="${esc(e.conversionPlannedType)}" placeholder="例: 40時間正社員"></div>
+        <div class="form-group" style="grid-column:span 2;"><label>試用期間</label><input type="text" id="f_trialPeriod" value="${esc(e.trialPeriod)}" placeholder="例: １２月１日　～　５月末（予定）"></div>
+        <div class="form-group"><label>お祝い金の有無</label><select id="f_celebrationMoney"><option value="" ${!e.celebrationMoney?'selected':''}>-</option><option value="有" ${e.celebrationMoney==='有'?'selected':''}>有</option><option value="無" ${e.celebrationMoney==='無'?'selected':''}>無</option></select></div>
+        <div class="form-group" style="grid-column:span 2;"><label>お祝い金の支給条件</label><input type="text" id="f_celebrationMoneyCondition" value="${esc(e.celebrationMoneyCondition)}"></div>
+      </div>
+    </div>
+
+    <div class="form-section">
       <h4>転換・リマインド</h4>
       <div class="form-grid form-grid-3">
         <div class="form-group"><label>転換日</label><input type="date" id="f_conversionDate" value="${e.conversionDate || ''}"></div>
@@ -972,6 +982,8 @@ function getFormData() {
     hasTimes: cb('f_hasTimes'), hasKot: cb('f_hasKot'), hasMusubi: cb('f_hasMusubi'),
     hasTicketRestaurant: cb('f_hasTicketRestaurant'), hasStoreKey: cb('f_hasStoreKey'),
     hasNameCard: cb('f_hasNameCard'), hasPhone: cb('f_hasPhone'), hasSeal: cb('f_hasSeal'), hasMynumber: cb('f_hasMynumber'),
+    conversionPlannedType: g('f_conversionPlannedType'), trialPeriod: g('f_trialPeriod'),
+    celebrationMoney: g('f_celebrationMoney'), celebrationMoneyCondition: g('f_celebrationMoneyCondition'),
     note: g('f_note'), note2: g('f_note2'),
   };
 }
@@ -1073,18 +1085,14 @@ function renderReminders() {
 
 // ===== HR スレッド ステータス表示 =====
 function hrThreadStatusHtml(item) {
-  const canEdit = userRole === 'admin' || userRole === 'editor';
+  // hrThreadTsはES Botがスレッド作成時に実値（postMessage戻り値）で書き込む確定値。
+  // 手動URL設定・下書き確認UIは廃止（2026-07-17設計方針: 推測・手動上書きの排除）
   const baseUrl = 'https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p';
-  if (item.hrThreadConfirmed && item.hrThreadTs) {
+  if (item.hrThreadTs) {
     const url = baseUrl + item.hrThreadTs.replace('.', '');
-    return `✅ <a href="${esc(url)}" target="_blank" rel="noopener" style="font-size:12px;">確認済み</a>`;
+    return `✅ <a href="${esc(url)}" target="_blank" rel="noopener" style="font-size:12px;">人事スレッド</a>`;
   }
-  if (item.hrThreadTsDraft) {
-    const btn = canEdit ? ` <button class="btn btn-outline btn-sm" onclick="openHrThreadModal('${esc(item.id)}')">確認する</button>` : '';
-    return `📝 下書きあり${btn}`;
-  }
-  const btn = canEdit ? ` <button class="btn btn-outline btn-sm" onclick="openHrThreadModal('${esc(item.id)}')">設定する</button>` : '';
-  return `未リンク${btn}`;
+  return '未作成（ES Botが次回通知時に自動作成）';
 }
 
 // ===== キャリアアップ管理 =====
