@@ -1381,10 +1381,12 @@ function renderHrConfirmTab() {
   const pending = employees.filter(e => e.hrThreadCandidate && !e.hrThreadConfirmed);
   // 候補あり・確認済み
   const confirmed = employees.filter(e => e.hrThreadCandidate && e.hrThreadConfirmed);
-  // 未紐付き（退職除く・スレッドなし・候補なし・拒否済みもなし）
+  // 未紐付き（退職除く・役員除く・現行/確定/履歴/候補/拒否のいずれも無い＝真に手動登録が必要な社員だけ）
   const unlinked = employees.filter(e =>
     (e.status || '在籍') !== '退職' &&
+    !e.hrTrackingExempt &&
     !e.hrThreadTs && !e.hrThreadConfirmed &&
+    !(e.hrThreadHistory && e.hrThreadHistory.length) &&
     !e.hrThreadCandidate && !(e.hrThreadRejectedTs && e.hrThreadRejectedTs.length)
   );
 
