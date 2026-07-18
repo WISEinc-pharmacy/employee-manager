@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新入社員 情報入力フォーム | ワイズグループ</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" integrity="sha384-ajMUFBUFMCyjh8uxJg6bkGcKe9RTolyjwbxB3yES0QQMenP3Oztj/W9vA2SJPcIh" crossorigin="anonymous"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" integrity="sha384-XMIl1b2Ez9tKAM0R5q67/iLdfnlLBl9kfo40X5WMtCPb+3OLplrjnOxZTYCg1SKY" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --color-primary: #3b82f6;
+      --color-primary-dark: #2563eb;
+      --color-surface: #ffffff;
+      --color-bg: #f1f5f9;
+      --color-text: #1e293b;
+      --color-text-sub: #64748b;
+      --color-border: #e2e8f0;
+      --color-success: #22c55e;
+      --color-danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+    .header {
+      background: #1a5276;
+      color: #fff;
+      padding: 14px 20px;
+    }
+    .header h1 { font-size: 16px; font-weight: 700; }
+    .header p  { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .card {
+      background: var(--color-surface);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-sub);
+      border-bottom: 1px solid var(--color-border);
+      padding-bottom: 6px;
+      margin: 20px 0 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .section-title:first-child { margin-top: 0; }
+    .form-group { margin-bottom: 14px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .req  { color: var(--color-danger); margin-left: 2px; }
+    .hint { font-size: 11px; font-weight: 400; color: var(--color-text-sub); margin-left: 4px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--color-text);
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    select {
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M0 0l6 7 6-7z' fill='%2364748b'/%3E%3C/svg%3E") no-repeat right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    .conditional { display: none; }
+    .conditional.show { display: block; }
+    .required-note { font-size: 12px; color: var(--color-text-sub); margin-bottom: 16px; }
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--color-primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: background 0.2s;
+    }
+    .btn-submit:hover:not(:disabled) { background: var(--color-primary-dark); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .msg { padding: 12px 16px; border-radius: 6px; margin-top: 14px; font-size: 14px; line-height: 1.5; display: none; }
+    .msg.success { background: #dcfce7; color: #166534; display: block; }
+    .msg.error   { background: #fee2e2; color: #991b1b; display: block; }
+    #doneCard { text-align: center; padding: 40px 24px; }
+    #doneCard .done-icon { font-size: 52px; margin-bottom: 16px; }
+    #doneCard h2 { font-size: 20px; margin-bottom: 8px; }
+    #doneCard p  { color: var(--color-text-sub); font-size: 14px; line-height: 1.6; }
+    #doneCard .btn-reload {
+      margin-top: 24px; padding: 10px 28px;
+      background: var(--color-primary); color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; cursor: pointer;
+    }
+    @media (min-width: 600px) {
+      .card { max-width: 560px; margin: 24px auto; padding: 28px 32px; }
+      .header { padding: 16px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>新入社員 情報入力フォーム</h1>
+  <p>ワイズグループ ── 店舗責任者専用</p>
+</div>
+
+<!-- 入力フォーム -->
+<div class="card" id="formCard">
+  <p class="required-note"><span class="req">★</span> は必須項目です</p>
+
+  <form id="intakeForm" novalidate>
+
+    <!-- 基本情報 -->
+    <div class="section-title">基本情報</div>
+
+    <div class="form-group">
+      <label>氏名（漢字）<span class="req">★</span></label>
+      <input type="text" id="name" placeholder="例：山田　花子" maxlength="100" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>フリガナ<span class="hint">（全角カタカナ）</span></label>
+      <input type="text" id="kana" placeholder="例：ヤマダ　ハナコ" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>プライベートメールアドレス<span class="req">★</span></label>
+      <input type="email" id="emailPersonal" placeholder="例：hanako@gmail.com" maxlength="200" autocomplete="email">
+    </div>
+
+    <!-- 所属・職能 -->
+    <div class="section-title">所属・職能</div>
+
+    <div class="form-group">
+      <label>所属（店舗）<span class="req">★</span></label>
+      <input type="text" id="store" placeholder="店舗名を入力または選択" list="storeList" maxlength="100">
+      <datalist id="storeList">
+        <option value="足立">
+        <option value="柏">
+        <option value="柏さくら台">
+        <option value="ながれやま薬局">
+        <option value="はぐくみ薬局 越谷">
+        <option value="我孫子">
+        <option value="アイ調剤薬局">
+        <option value="清瀬">
+        <option value="本社">
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>職能</label>
+      <input type="text" id="jobType" placeholder="選択または入力" list="jobTypeList" maxlength="50">
+      <datalist id="jobTypeList">
+        <option value="薬剤師">
+        <option value="一般職">
+        <option value="総務">
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>役職<span class="hint">（なしの場合は空白可）</span></label>
+      <input type="text" id="position" placeholder="例：管理薬剤師 / なし" maxlength="100">
+    </div>
+
+    <!-- 雇用条件 -->
+    <div class="section-title">雇用条件</div>
+
+    <div class="form-group">
+      <label>入社日<span class="req">★</span></label>
+      <input type="date" id="hireDate">
+    </div>
+    <div class="form-group">
+      <label>転換後の予定雇用形態<span class="hint">（試用期間後）</span></label>
+      <input type="text" id="conversionPlannedType" placeholder="例：40時間正社員" list="convTypeList" maxlength="100">
+      <datalist id="convTypeList">
+        <option value="40時間正社員">
+        <option value="30時間正社員">
+        <option value="30時間時短社員">
+        <option value="業務委託">
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label>試用期間<span class="hint">（例：12月1日 〜 5月末（予定））</span></label>
+      <input type="text" id="trialPeriod" placeholder="例：12月1日 〜 5月末（予定）" maxlength="200">
+    </div>
+
+    <!-- キャリアアップ -->
+    <div class="section-title">キャリアアップ</div>
+
+    <div class="form-group">
+      <label>キャリアアップの有無</label>
+      <select id="careerUp" onchange="toggleConditional('careerUp','有','careerUpDateGroup')">
+        <option value="">選択してください</option>
+        <option value="有">有</option>
+        <option value="無">無</option>
+      </select>
+    </div>
+    <div class="form-group conditional" id="careerUpDateGroup">
+      <label>キャリアアップ予定日<span class="req">★</span></label>
+      <input type="date" id="careerUpDate">
+    </div>
+
+    <!-- お祝い金 -->
+    <div class="section-title">お祝い金</div>
+
+    <div class="form-group">
+      <label>お祝い金の有無</label>
+      <select id="celebrationMoney" onchange="toggleConditional('celebrationMoney','有','celebrationCondGroup')">
+        <option value="">選択してください</option>
+        <option value="有">有</option>
+        <option value="無">無</option>
+      </select>
+    </div>
+    <div class="form-group conditional" id="celebrationCondGroup">
+      <label>お祝い金の支給条件</label>
+      <textarea id="celebrationMoneyCondition" placeholder="例：有給消化中に来てもらっているバイト代としてお祝い金を支給" maxlength="500"></textarea>
+    </div>
+
+    <!-- 入力者情報 -->
+    <div class="section-title">入力者情報</div>
+
+    <div class="form-group">
+      <label>入力者名（責任者）<span class="req">★</span></label>
+      <input type="text" id="submittedBy" placeholder="例：山内 慶太（入力した責任者のお名前）" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>備考</label>
+      <textarea id="note" placeholder="特記事項があればご記入ください" maxlength="500"></textarea>
+    </div>
+
+    <button type="submit" class="btn-submit" id="submitBtn">送信する</button>
+  </form>
+
+  <div class="msg" id="msgBox"></div>
+</div>
+
+<!-- 送信完了 -->
+<div class="card" id="doneCard" style="display:none;">
+  <div class="done-icon">✅</div>
+  <h2>送信しました</h2>
+  <p>管理部が内容を確認し、<br>社員管理表への登録・人事スレッドの作成を行います。</p>
+  <button class="btn-reload" onclick="location.reload()">続けて入力する</button>
+</div>
+
+<script>
+  // ===== Firebase（employee_manager と同一プロジェクト）=====
+  const firebaseConfig = {
+    apiKey: "AIzaSyC1Yr7rBcBJ0ACbO6w9G8jt2S9kVZSIqiQ",
+    authDomain: "wise-patientdb.firebaseapp.com",
+    projectId: "wise-patientdb",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // ===== 条件表示トグル =====
+  function toggleConditional(selectId, showValue, groupId) {
+    const show = document.getElementById(selectId).value === showValue;
+    document.getElementById(groupId).classList.toggle('show', show);
+    if (!show) {
+      // 非表示になったフィールドをクリア
+      const inputs = document.getElementById(groupId).querySelectorAll('input,textarea,select');
+      inputs.forEach(el => { el.value = ''; });
+    }
+  }
+
+  // ===== ユーティリティ =====
+  function getVal(id) {
+    return (document.getElementById(id).value || '').trim();
+  }
+  function showMsg(text, type) {
+    const el = document.getElementById('msgBox');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ===== バリデーション =====
+  const REQUIRED = {
+    name:          '氏名（漢字）',
+    emailPersonal: 'プライベートメールアドレス',
+    store:         '所属（店舗）',
+    hireDate:      '入社日',
+    submittedBy:   '入力者名（責任者）',
+  };
+  function validate() {
+    for (const [id, label] of Object.entries(REQUIRED)) {
+      if (!getVal(id)) {
+        showMsg('「' + label + '」は必須です。', 'error');
+        document.getElementById(id).focus();
+        return false;
+      }
+    }
+    const email = getVal('emailPersonal');
+    if (email && !email.includes('@')) {
+      showMsg('メールアドレスの形式が正しくありません。', 'error');
+      document.getElementById('emailPersonal').focus();
+      return false;
+    }
+    if (getVal('careerUp') === '有' && !getVal('careerUpDate')) {
+      showMsg('キャリアアップ予定日を入力してください。', 'error');
+      document.getElementById('careerUpDate').focus();
+      return false;
+    }
+    return true;
+  }
+
+  // ===== 送信処理 =====
+  document.getElementById('intakeForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    document.getElementById('msgBox').className = 'msg'; // メッセージリセット
+
+    if (!validate()) return;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '送信中...';
+
+    // フォームデータ収集（空文字は送信しない = ルール許可キー内に収める）
+    const data = {};
+    const fields = [
+      'name','kana','emailPersonal','store','jobType','position',
+      'hireDate','conversionPlannedType','trialPeriod',
+      'careerUp','careerUpDate',
+      'celebrationMoney','celebrationMoneyCondition',
+      'submittedBy','note',
+    ];
+    fields.forEach(k => {
+      const v = getVal(k);
+      if (v) data[k] = v;
+    });
+    data.status      = 'pending';
+    data.source      = 'intake_form';
+    data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+    try {
+      await db.collection('employeeIntake').add(data);
+      document.getElementById('formCard').style.display = 'none';
+      document.getElementById('doneCard').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('intake submit error:', err);
+      showMsg('送信に失敗しました。時間をおいて再試行してください。（' + err.message + '）', 'error');
+      btn.disabled = false;
+      btn.textContent = '送信する';
+    }
+  });
+</script>
+</body>
+</html>

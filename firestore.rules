@@ -41,5 +41,29 @@ service cloud.firestore {
       allow read: if isEditorOrAdmin();
       allow write: if false;
     }
+
+    // employeeIntake (新入社員受付フォーム) — 無認証でのcreate可・read/update/deleteはeditor以上
+    // create時は許可キーのみ・必須フィールドのバリデーションでスパム書込を抑制
+    match /employeeIntake/{docId} {
+      allow read, update, delete: if isEditorOrAdmin();
+      allow create: if isValidIntake(request.resource.data);
+    }
+
+    function isValidIntake(d) {
+      return d.keys().hasOnly([
+          'name','kana','emailPersonal','jobType','store','position',
+          'hireDate','conversionPlannedType','trialPeriod',
+          'careerUp','careerUpDate',
+          'celebrationMoney','celebrationMoneyCondition',
+          'submittedBy','note','status','source','submittedAt'
+        ])
+        && d.status == 'pending'
+        && d.source == 'intake_form'
+        && d.name is string && d.name.size() > 0 && d.name.size() < 100
+        && d.emailPersonal is string && d.emailPersonal.size() > 0 && d.emailPersonal.size() < 300
+        && d.store is string && d.store.size() > 0 && d.store.size() < 100
+        && d.hireDate is string && d.hireDate.size() > 0 && d.hireDate.size() < 20
+        && d.submittedBy is string && d.submittedBy.size() > 0 && d.submittedBy.size() < 100;
+    }
   }
 }
