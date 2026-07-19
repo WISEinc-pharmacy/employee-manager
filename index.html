@@ -180,6 +180,7 @@ body.role-viewer .sensitive-col { display: none !important; }
     <div class="tab" data-tab="careerup" onclick="switchTab('careerup')">キャリアアップ管理</div>
     <div class="tab" data-tab="sync" onclick="switchTab('sync')">連携（freee/KOT）</div>
     <div class="tab" data-tab="hrconfirm" onclick="switchTab('hrconfirm')">スレッド確認 <span id="hrconfirmBadge" class="tab-badge" style="display:none;">0</span></div>
+    <div class="tab" data-tab="intake" onclick="switchTab('intake')">入社受付 <span id="intakeBadge" class="tab-badge" style="display:none;">0</span></div>
   </div>
 
   <!-- ===== 社員一覧タブ ===== -->
@@ -289,6 +290,12 @@ body.role-viewer .sensitive-col { display: none !important; }
       </label>
     </div>
     <div id="hrconfirmContent"></div>
+  </div>
+
+  <!-- ===== 入社受付タブ（intake.html からの申請を承認） ===== -->
+  <div id="tab-intake" class="container" style="display:none;">
+    <div class="stats-bar" id="intakeStats"></div>
+    <div id="intakeContent"></div>
   </div>
 </div>
 
@@ -513,6 +520,10 @@ function applyPermissions() {
   document.querySelectorAll('[data-tab="sync"]').forEach(el => {
     el.style.display = canEdit ? '' : 'none';
   });
+  // 入社受付タブ（承認操作）はeditor以上のみ
+  document.querySelectorAll('[data-tab="intake"]').forEach(el => {
+    el.style.display = canEdit ? '' : 'none';
+  });
 }
 
 const FIELD_SOURCES = [
@@ -594,6 +605,7 @@ function switchTab(tab) {
   if (tab === 'careerup') renderCareerup();
   if (tab === 'sync') renderSyncTab();
   if (tab === 'hrconfirm') renderHrConfirmTab();
+  if (tab === 'intake') renderIntakeTab();
 }
 
 // ===== 社員データ =====
@@ -606,6 +618,7 @@ async function loadEmployees() {
   renderStats();
   computeReminders();
   renderHrConfirmTab();
+  refreshIntakeBadge();
 }
 
 function populateFilters() {
@@ -1564,6 +1577,150 @@ async function rejectHrThread(empId) {
     renderHrConfirmTab();
   } catch (e) {
     alert('操作に失敗しました: ' + e.message);
+  }
+}
+
+// ===== 入社受付（intake.html からの申請を承認して社員登録） =====
+let intakePendingDocs = [];
+let intakeBusy = false;
+
+async function refreshIntakeBadge() {
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  const badge = document.getElementById('intakeBadge');
+  if (!canEdit || !badge) return;
+  try {
+    const snap = await db.collection('employeeIntake').where('status', '==', 'pending').get();
+    intakePendingDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    badge.textContent = intakePendingDocs.length;
+    badge.style.display = intakePendingDocs.length > 0 ? '' : 'none';
+  } catch (e) { /* 権限なし等は無視（viewerには読めない） */ }
+}
+
+async function renderIntakeTab() {
+  const canEdit = userRole === 'admin' || userRole === 'editor';
+  const statsEl = document.getElementById('intakeStats');
+  const contentEl = document.getElementById('intakeContent');
+  if (!canEdit) { contentEl.innerHTML = '<p style="color:#6b7280;padding:20px 0;">この画面の操作権限がありません。</p>'; return; }
+
+  await refreshIntakeBadge();
+  const list = [...intakePendingDocs].sort((a, b) => {
+    const ta = (a.submittedAt && a.submittedAt.seconds) || 0;
+    const tb = (b.submittedAt && b.submittedAt.seconds) || 0;
+    return tb - ta;
+  });
+
+  statsEl.innerHTML = `<div class="stat-card"><div class="label">承認待ち</div><div class="value"${list.length > 0 ? ' style="color:#d97706;"' : ''}>${list.length}</div></div>`;
+
+  if (list.length === 0) {
+    contentEl.innerHTML = `<p style="color:#6b7280;padding:20px 0;">承認待ちの申請はありません。<br>
+      <span style="font-size:12px;">店舗責任者用フォーム: <a href="intake.html" target="_blank" rel="noopener">入社受付フォーム</a>（このURLを店舗責任者に共有してください）</span></p>`;
+    return;
+  }
+
+  const row = (label, val) => val ? `<tr><td style="padding:4px 10px;color:#6b7280;white-space:nowrap;vertical-align:top;">${label}</td><td style="padding:4px 10px;">${esc(val)}</td></tr>` : '';
+  let html = '';
+  for (const d of list) {
+    const submitted = (d.submittedAt && d.submittedAt.toDate) ? d.submittedAt.toDate().toLocaleString('ja-JP') : '';
+    const dupe = findIntakeDuplicate(d);
+    html += `
+      <div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:16px 20px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:16px;font-weight:700;">${esc(d.name || '')}</span>
+          <span style="color:#6b7280;">${esc(d.kana || '')}</span>
+          <span style="background:#e0e7ff;color:#3730a3;border-radius:10px;padding:2px 10px;font-size:12px;">${esc(d.store || '')}</span>
+          ${dupe ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 10px;font-size:12px;">⚠️ 同名/同メールの社員あり</span>` : ''}
+        </div>
+        <table style="font-size:13px;margin-top:10px;border-collapse:collapse;">
+          ${row('私用メール', d.emailPersonal)}
+          ${row('職能', d.jobType)}
+          ${row('役職', d.position)}
+          ${row('入社日', d.hireDate)}
+          ${row('転換後の予定雇用形態', d.conversionPlannedType)}
+          ${row('試用期間', d.trialPeriod)}
+          ${row('キャリアアップ', d.careerUp === '有' ? `有（${d.careerUpDate || '日付未入力'}）` : d.careerUp)}
+          ${row('お祝い金', d.celebrationMoney === '有' ? `有（${d.celebrationMoneyCondition || '条件未記入'}）` : d.celebrationMoney)}
+          ${row('備考', d.note)}
+          ${row('入力者（責任者）', d.submittedBy)}
+          ${row('送信日時', submitted)}
+        </table>
+        <div style="margin-top:12px;">
+          <button class="btn btn-success btn-sm" onclick="approveIntake('${esc(d.id)}')">✓ 承認して社員登録</button>
+          <button class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="rejectIntake('${esc(d.id)}')">✗ 却下</button>
+        </div>
+      </div>`;
+  }
+  contentEl.innerHTML = html;
+}
+
+function findIntakeDuplicate(d) {
+  const nm = (d.name || '').replace(/\s/g, '');
+  const em = (d.emailPersonal || '').toLowerCase().trim();
+  return employees.find(e =>
+    (nm && (e.name || '').replace(/\s/g, '') === nm) ||
+    (em && (((e.emailPersonal || '').toLowerCase().trim() === em) || ((e.personalEmail || '').toLowerCase().trim() === em)))
+  ) || null;
+}
+
+async function approveIntake(docId) {
+  if (intakeBusy) return;
+  if (!(userRole === 'admin' || userRole === 'editor')) return;
+  const d = intakePendingDocs.find(x => x.id === docId);
+  if (!d) return alert('申請データが見つかりません。ページを再読み込みしてください。');
+
+  const dupe = findIntakeDuplicate(d);
+  if (dupe && !confirm(`⚠️ 同名または同メールの社員が既に登録されています（${dupe.name} / ${dupe.store || '店舗未設定'}）。\n重複登録になる可能性があります。それでも続行しますか？`)) return;
+  if (!confirm(`${d.name} さんを社員登録します。よろしいですか？\n（登録後、人事スレッドをES Botが数分以内に自動作成します）`)) return;
+
+  intakeBusy = true;
+  try {
+    const emp = {};
+    ['name', 'kana', 'jobType', 'store', 'hireDate', 'conversionPlannedType', 'trialPeriod', 'celebrationMoney', 'celebrationMoneyCondition'].forEach(k => { if (d[k]) emp[k] = d[k]; });
+    if (d.emailPersonal) { emp.emailPersonal = d.emailPersonal; emp.personalEmail = d.emailPersonal; } // ダッシュボードはemailPersonal・ES BotはpersonalEmailを参照するため両方書く
+    emp.position = (d.position && d.position !== 'なし') ? d.position : '';
+    if (d.careerUp === '有' && d.careerUpDate) emp.careerUpDate = d.careerUpDate;
+    if (d.note) emp.note2 = `【入社受付フォーム】${d.note}`;
+    emp.status = '在籍';
+    emp.hrThreadPending = true;   // ES Botがこのフラグを見て人事スレッドを自動作成する
+    emp.intakeDocId = docId;      // 出所トレース（どの申請から登録されたか）
+    emp.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    emp.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    emp.updatedBy = currentUser.email;
+
+    const ref = await db.collection('employees').add(emp);
+    await db.collection('employeeIntake').doc(docId).update({
+      status: 'approved',
+      approvedBy: currentUser.email,
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      employeeId: ref.id,
+    });
+    alert('社員登録しました。人事スレッドはES Botが数分以内に自動作成します。');
+    await loadEmployees();
+    await renderIntakeTab();
+  } catch (e) {
+    alert('登録に失敗しました: ' + e.message);
+  } finally {
+    intakeBusy = false;
+  }
+}
+
+async function rejectIntake(docId) {
+  if (intakeBusy) return;
+  if (!(userRole === 'admin' || userRole === 'editor')) return;
+  const d = intakePendingDocs.find(x => x.id === docId);
+  if (!d) return;
+  if (!confirm(`${d.name} さんの申請を却下します。よろしいですか？\n（社員登録は行われません。申請データは記録として残ります）`)) return;
+  intakeBusy = true;
+  try {
+    await db.collection('employeeIntake').doc(docId).update({
+      status: 'rejected',
+      rejectedBy: currentUser.email,
+      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await renderIntakeTab();
+  } catch (e) {
+    alert('操作に失敗しました: ' + e.message);
+  } finally {
+    intakeBusy = false;
   }
 }
 
