@@ -362,6 +362,33 @@
       btn.textContent = '送信する';
     }
   });
+
+  // ===== プレフィルURL対応（?name=…&store=… 付きリンクで入力済み状態で開く）=====
+  // 値は .value への代入のみ（HTMLとして解釈されないためXSS安全）。責任者は送信前に自由に修正できる
+  (function prefillFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const fields = [
+      'name','kana','emailPersonal','store','jobType','position',
+      'hireDate','conversionPlannedType','trialPeriod',
+      'careerUp','careerUpDate',
+      'celebrationMoney','celebrationMoneyCondition',
+      'submittedBy','note',
+    ];
+    let filled = 0;
+    fields.forEach(id => {
+      const v = params.get(id);
+      if (v === null || v === '') return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      const max = (el.maxLength && el.maxLength > 0) ? el.maxLength : 500;
+      el.value = v.slice(0, max);
+      if (el.value) filled++;
+    });
+    // 「有」選択時の追加欄（予定日・支給条件）の表示状態を反映
+    toggleConditional('careerUp', '有', 'careerUpDateGroup');
+    toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
+    if (filled > 0) showMsg('リンクから ' + filled + ' 項目を自動入力しました。内容をご確認・修正のうえ送信してください。', 'success');
+  })();
 </script>
 </body>
 </html>
