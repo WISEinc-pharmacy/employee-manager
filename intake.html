@@ -322,73 +322,164 @@
     return true;
   }
 
-  // ===== 送信処理 =====
-  document.getElementById('intakeForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    document.getElementById('msgBox').className = 'msg'; // メッセージリセット
-
-    if (!validate()) return;
-
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.textContent = '送信中...';
-
-    // フォームデータ収集（空文字は送信しない = ルール許可キー内に収める）
-    const data = {};
-    const fields = [
-      'name','kana','emailPersonal','store','jobType','position',
-      'hireDate','conversionPlannedType','trialPeriod',
-      'careerUp','careerUpDate',
-      'celebrationMoney','celebrationMoneyCondition',
-      'submittedBy','note',
-    ];
-    fields.forEach(k => {
-      const v = getVal(k);
-      if (v) data[k] = v;
-    });
-    data.status      = 'pending';
-    data.source      = 'intake_form';
-    data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
-
-    try {
-      await db.collection('employeeIntake').add(data);
-      document.getElementById('formCard').style.display = 'none';
-      document.getElementById('doneCard').style.display = 'block';
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      console.error('intake submit error:', err);
-      showMsg('送信に失敗しました。時間をおいて再試行してください。（' + err.message + '）', 'error');
-      btn.disabled = false;
-      btn.textContent = '送信する';
-    }
-  });
-
-  // ===== プレフィルURL対応（?name=…&store=… 付きリンクで入力済み状態で開く）=====
+  // ===== 編集モード(?doc=<id>)または プレフィルURL対応(?name=…&store=… )=====
   // 値は .value への代入のみ（HTMLとして解釈されないためXSS安全）。責任者は送信前に自由に修正できる
-  (function prefillFromUrl() {
-    const params = new URLSearchParams(location.search);
-    const fields = [
-      'name','kana','emailPersonal','store','jobType','position',
-      'hireDate','conversionPlannedType','trialPeriod',
-      'careerUp','careerUpDate',
-      'celebrationMoney','celebrationMoneyCondition',
-      'submittedBy','note',
-    ];
-    let filled = 0;
-    fields.forEach(id => {
-      const v = params.get(id);
-      if (v === null || v === '') return;
-      const el = document.getElementById(id);
-      if (!el) return;
-      const max = (el.maxLength && el.maxLength > 0) ? el.maxLength : 500;
-      el.value = v.slice(0, max);
-      if (el.value) filled++;
+
+  const FORM_FIELDS = [
+    'name','kana','emailPersonal','store','jobType','position',
+    'hireDate','conversionPlannedType','trialPeriod',
+    'careerUp','careerUpDate',
+    'celebrationMoney','celebrationMoneyCondition',
+    'submittedBy','note',
+  ];
+
+  // ?doc=<id> がある場合は編集モード
+  const docId = new URLSearchParams(location.search).get('doc');
+
+  if (docId) {
+    // ===== 編集モード =====
+    (async function initEditMode() {
+      let snap;
+      try {
+        snap = await db.collection('employeeIntake').doc(docId).get();
+      } catch (err) {
+        // 取得エラー（権限なし等）
+        document.getElementById('formCard').style.display = 'none';
+        const errCard = document.createElement('div');
+        errCard.className = 'card';
+        errCard.style.textAlign = 'center';
+        errCard.style.padding = '40px 24px';
+        errCard.textContent = 'このリンクは無効です（処理済みまたは期限切れ）。管理部へお問い合わせください。';
+        document.body.appendChild(errCard);
+        return;
+      }
+
+      if (!snap.exists || snap.data().status !== 'pending') {
+        document.getElementById('formCard').style.display = 'none';
+        const errCard = document.createElement('div');
+        errCard.className = 'card';
+        errCard.style.textAlign = 'center';
+        errCard.style.padding = '40px 24px';
+        errCard.textContent = 'このリンクは無効です（処理済みまたは期限切れ）。管理部へお問い合わせください。';
+        document.body.appendChild(errCard);
+        return;
+      }
+
+      const d = snap.data();
+
+      // バナー挿入（XSS対策: textContentのみ使用）
+      const banner = document.createElement('div');
+      banner.style.cssText = 'background:#dbeafe;color:#1e40af;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:14px;line-height:1.6;';
+      const nameSpan = document.createElement('strong');
+      nameSpan.textContent = d.name || '';  // textContentのみ・innerHTML禁止
+      banner.appendChild(nameSpan);
+      const bannerText = document.createTextNode(' さんの入社受付（採用DB連携）です。空欄をご入力のうえ送信してください。');
+      banner.appendChild(bannerText);
+      const form = document.getElementById('intakeForm');
+      form.insertBefore(banner, form.firstChild);
+
+      // フィールドをプレフィル（.value代入のみ）
+      FORM_FIELDS.forEach(id => {
+        const v = d[id];
+        if (v === undefined || v === null || v === '') return;
+        const el = document.getElementById(id);
+        if (!el) return;
+        const max = (el.maxLength && el.maxLength > 0) ? el.maxLength : 500;
+        el.value = String(v).slice(0, max);
+      });
+      // 条件表示欄を反映
+      toggleConditional('careerUp', '有', 'careerUpDateGroup');
+      toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
+
+      // 送信処理を編集モード用に差し替え
+      // — add() ではなく doc(id).update() でフォーム項目のみ更新
+      // — source/status/submittedAt/recruitGmailThreadId/recruitSlackTs は絶対に触らない
+      document.getElementById('intakeForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        document.getElementById('msgBox').className = 'msg';
+
+        if (!validate()) return;
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = '送信中...';
+
+        const update = {};
+        FORM_FIELDS.forEach(k => {
+          const v = getVal(k);
+          if (v) update[k] = v;
+        });
+        // completedAt を追加（source/status 等は絶対に含めない）
+        update.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+        try {
+          await db.collection('employeeIntake').doc(docId).update(update);
+          document.getElementById('formCard').style.display = 'none';
+          document.getElementById('doneCard').style.display = 'block';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (err) {
+          console.error('intake edit submit error:', err);
+          showMsg('送信に失敗しました。時間をおいて再試行してください。（' + err.message + '）', 'error');
+          btn.disabled = false;
+          btn.textContent = '送信する';
+        }
+      });
+
+    })();
+
+  } else {
+    // ===== 通常モード（新規create）+ ?name= プレフィル =====
+    (function prefillFromUrl() {
+      const params = new URLSearchParams(location.search);
+      let filled = 0;
+      FORM_FIELDS.forEach(id => {
+        const v = params.get(id);
+        if (v === null || v === '') return;
+        const el = document.getElementById(id);
+        if (!el) return;
+        const max = (el.maxLength && el.maxLength > 0) ? el.maxLength : 500;
+        el.value = v.slice(0, max);
+        if (el.value) filled++;
+      });
+      // 「有」選択時の追加欄（予定日・支給条件）の表示状態を反映
+      toggleConditional('careerUp', '有', 'careerUpDateGroup');
+      toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
+      if (filled > 0) showMsg('リンクから ' + filled + ' 項目を自動入力しました。内容をご確認・修正のうえ送信してください。', 'success');
+    })();
+
+    // 通常モード: 既存の submit ハンドラを登録（add方式）
+    document.getElementById('intakeForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      document.getElementById('msgBox').className = 'msg';
+
+      if (!validate()) return;
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+
+      const data = {};
+      FORM_FIELDS.forEach(k => {
+        const v = getVal(k);
+        if (v) data[k] = v;
+      });
+      data.status      = 'pending';
+      data.source      = 'intake_form';
+      data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+      try {
+        await db.collection('employeeIntake').add(data);
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('doneCard').style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        console.error('intake submit error:', err);
+        showMsg('送信に失敗しました。時間をおいて再試行してください。（' + err.message + '）', 'error');
+        btn.disabled = false;
+        btn.textContent = '送信する';
+      }
     });
-    // 「有」選択時の追加欄（予定日・支給条件）の表示状態を反映
-    toggleConditional('careerUp', '有', 'careerUpDateGroup');
-    toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
-    if (filled > 0) showMsg('リンクから ' + filled + ' 項目を自動入力しました。内容をご確認・修正のうえ送信してください。', 'success');
-  })();
+  }
 </script>
 </body>
 </html>

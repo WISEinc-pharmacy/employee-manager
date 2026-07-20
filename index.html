@@ -1622,12 +1622,16 @@ async function renderIntakeTab() {
   for (const d of list) {
     const submitted = (d.submittedAt && d.submittedAt.toDate) ? d.submittedAt.toDate().toLocaleString('ja-JP') : '';
     const dupe = findIntakeDuplicate(d);
+    const isRecruitAuto = d.source === 'recruit_auto';
+    // 編集リンク（?doc=docId）のURLをコピーするボタン
+    const editUrl = location.origin + location.pathname.replace('index.html', '') + 'intake.html?doc=' + encodeURIComponent(d.id);
     html += `
       <div style="background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:16px 20px;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span style="font-size:16px;font-weight:700;">${esc(d.name || '')}</span>
           <span style="color:#6b7280;">${esc(d.kana || '')}</span>
           <span style="background:#e0e7ff;color:#3730a3;border-radius:10px;padding:2px 10px;font-size:12px;">${esc(d.store || '')}</span>
+          ${isRecruitAuto ? `<span style="background:#fef9c3;color:#854d0e;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;">採用DB連携</span>` : ''}
           ${dupe ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 10px;font-size:12px;">⚠️ 同名/同メールの社員あり</span>` : ''}
         </div>
         <table style="font-size:13px;margin-top:10px;border-collapse:collapse;">
@@ -1643,13 +1647,30 @@ async function renderIntakeTab() {
           ${row('入力者（責任者）', d.submittedBy)}
           ${row('送信日時', submitted)}
         </table>
-        <div style="margin-top:12px;">
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-success btn-sm" onclick="approveIntake('${esc(d.id)}')">✓ 承認して社員登録</button>
-          <button class="btn btn-danger btn-sm" style="margin-left:6px;" onclick="rejectIntake('${esc(d.id)}')">✗ 却下</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectIntake('${esc(d.id)}')">✗ 却下</button>
+          ${isRecruitAuto ? `<button class="btn btn-outline btn-sm" onclick="copyIntakeEditLink('${esc(d.id)}', this)" title="店舗責任者へ送る編集URLをコピー">編集URLをコピー</button>` : ''}
         </div>
       </div>`;
   }
   contentEl.innerHTML = html;
+}
+
+// 採用DB連携カードの「編集URLをコピー」ボタン
+function copyIntakeEditLink(docId, btn) {
+  const editUrl = location.origin + location.pathname.replace(/\/[^\/]*$/, '/') + 'intake.html?doc=' + encodeURIComponent(docId);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(editUrl).then(function() {
+      const orig = btn.textContent;
+      btn.textContent = 'コピーしました';
+      setTimeout(function() { btn.textContent = orig; }, 2000);
+    }).catch(function() {
+      prompt('URLをコピーしてください:', editUrl);
+    });
+  } else {
+    prompt('URLをコピーしてください:', editUrl);
+  }
 }
 
 function findIntakeDuplicate(d) {
@@ -1669,6 +1690,8 @@ async function approveIntake(docId) {
 
   const dupe = findIntakeDuplicate(d);
   if (dupe && !confirm(`⚠️ 同名または同メールの社員が既に登録されています（${dupe.name} / ${dupe.store || '店舗未設定'}）。\n重複登録になる可能性があります。それでも続行しますか？`)) return;
+  // 店舗 or 入社日が未入力の場合は警告
+  if ((!d.store || !d.hireDate) && !confirm(`⚠️ 店舗/入社日が未入力です。このまま承認すると人事スレッドに店舗が表示されません。続行しますか？`)) return;
   if (!confirm(`${d.name} さんを社員登録します。よろしいですか？\n（登録後、人事スレッドをES Botが数分以内に自動作成します）`)) return;
 
   intakeBusy = true;

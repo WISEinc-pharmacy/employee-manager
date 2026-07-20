@@ -44,11 +44,30 @@ service cloud.firestore {
 
     // employeeIntake (新入社員受付フォーム) — 無認証でのcreate可・read/update/deleteはeditor以上
     // create時は許可キーのみ・必須フィールドのバリデーションでスパム書込を抑制
+    // get(単一取得): status=='pending'のみ公開（list は絶対に公開しない）
+    // update(編集モード): status=='pending'のドキュメントのみ・status格上げ不可
     match /employeeIntake/{docId} {
       allow read, update, delete: if isEditorOrAdmin();
       allow create: if isValidIntake(request.resource.data);
+      allow get: if resource.data.status == 'pending';
+      allow update: if resource.data.status == 'pending'
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'name','kana','emailPersonal','jobType','store','position',
+                         'hireDate','conversionPlannedType','trialPeriod',
+                         'careerUp','careerUpDate',
+                         'celebrationMoney','celebrationMoneyCondition',
+                         'submittedBy','note','completedAt'
+                       ])
+                    && isValidIntakeEdit(request.resource.data);
     }
 
+    // recruitIntakeState — Admin SDK専用コレクション（全クライアントアクセス禁止）
+    match /recruitIntakeState/{id} {
+      allow read, write: if false;
+    }
+
+    // isValidIntake: intake_form(新規create)用バリデーション
     function isValidIntake(d) {
       return d.keys().hasOnly([
           'name','kana','emailPersonal','jobType','store','position',
@@ -59,6 +78,27 @@ service cloud.firestore {
         ])
         && d.status == 'pending'
         && d.source == 'intake_form'
+        && d.name is string && d.name.size() > 0 && d.name.size() < 100
+        && d.emailPersonal is string && d.emailPersonal.size() > 0 && d.emailPersonal.size() < 300
+        && d.store is string && d.store.size() > 0 && d.store.size() < 100
+        && d.hireDate is string && d.hireDate.size() > 0 && d.hireDate.size() < 20
+        && d.submittedBy is string && d.submittedBy.size() > 0 && d.submittedBy.size() < 100;
+    }
+
+    // isValidIntakeEdit: 編集モード(update)用バリデーション
+    // — 不変性(source/status/submittedAt/recruitGmailThreadId/recruitSlackTs)は
+    //   update側の diff().affectedKeys().hasOnly() で強制。ここは最終状態の型・必須チェック
+    // — completedAt はサーバータイムスタンプとして許可
+    function isValidIntakeEdit(d) {
+      return d.keys().hasOnly([
+          'name','kana','emailPersonal','jobType','store','position',
+          'hireDate','conversionPlannedType','trialPeriod',
+          'careerUp','careerUpDate',
+          'celebrationMoney','celebrationMoneyCondition',
+          'submittedBy','note','status','source','submittedAt',
+          'completedAt','recruitGmailThreadId','recruitSlackTs'
+        ])
+        && d.status == 'pending'
         && d.name is string && d.name.size() > 0 && d.name.size() < 100
         && d.emailPersonal is string && d.emailPersonal.size() > 0 && d.emailPersonal.size() < 300
         && d.store is string && d.store.size() > 0 && d.store.size() < 100
