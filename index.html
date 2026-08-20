@@ -216,7 +216,7 @@ body.role-viewer .sensitive-col { display: none !important; }
           <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
           <th>KOT番号</th><th class="sensitive-col">残業(先月)<span class="src-badge src-kot">KOT</span></th><th class="sensitive-col">有給取得率<span class="src-badge src-kot">KOT</span></th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
-          <th>Drive</th><th>備考</th><th></th>
+          <th>Drive</th><th>スレッド</th><th>備考</th><th></th>
         </tr></thead>
         <tbody id="empTableBody"></tbody>
       </table>
@@ -697,6 +697,7 @@ function renderTable() {
       <td>${esc(e.hasSeal)}</td>
       <td class="sensitive-col">${esc(e.hasMynumber)}</td>
       <td>${safeUrl(e.driveFolderUrl) ? `<a href="${esc(safeUrl(e.driveFolderUrl))}" target="_blank" rel="noopener noreferrer">開く</a>` : ''}</td>
+      <td>${hrThreadUrl(e.hrThreadTs) ? `<a href="${esc(hrThreadUrl(e.hrThreadTs))}" target="_blank" rel="noopener noreferrer" title="人事Slackスレッドを開く">🧵スレッド</a>` : ''}</td>
       <td class="cell-clip" title="${esc(e.note)}">${esc(e.note)}</td>
       <td>${userRole !== 'viewer' ? `<button class="btn btn-sm btn-outline" onclick="openModal('${e.id}')">編集</button>` : ''}</td>
     </tr>`;
@@ -808,6 +809,12 @@ function getLeaveText(e) {
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // http(s) のURLだけをリンク化対象として返す（javascript:等のスキームインジェクション防止）
 function safeUrl(u) { return /^https?:\/\//i.test((u || '').trim()) ? (u || '').trim() : ''; }
+// 人事スレッドts(例:1786....123456)→SlackスレッドURL。ts形式(数値.数値)以外は空を返す（XSS/不正値防止・https固定）
+function hrThreadUrl(ts) {
+  const t = (typeof ts === 'string' ? ts : '').trim();
+  if (!/^\d+\.\d+$/.test(t)) return '';
+  return 'https://tsunagu-pharmacy.slack.com/archives/C06PBEXSJSG/p' + t.replace('.', '');
+}
 // 生年月日→年齢（自動計算）
 function calcAge(b){ if(!b)return''; const d=new Date(b); if(isNaN(d))return''; const t=new Date(); let a=t.getFullYear()-d.getFullYear(); const md=t.getMonth()-d.getMonth(); if(md<0||(md===0&&t.getDate()<d.getDate()))a--; return (a>=0&&a<130)?a+'歳':''; }
 // 入社日→勤続年数（自動計算）
