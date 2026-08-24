@@ -85,6 +85,9 @@
     textarea { resize: vertical; min-height: 72px; }
     .conditional { display: none; }
     .conditional.show { display: block; }
+    .fulltime-only.is-contract { opacity: 0.55; }
+    .fulltime-only.is-contract input,
+    .fulltime-only.is-contract select { background: #f1f5f9; cursor: not-allowed; }
     .required-note { font-size: 12px; color: var(--color-text-sub); margin-bottom: 16px; }
     .btn-submit {
       width: 100%;
@@ -144,7 +147,15 @@
       <input type="text" id="kana" placeholder="例：ヤマダ　ハナコ" maxlength="100">
     </div>
     <div class="form-group">
-      <label>プライベートメールアドレス<span class="req">★</span></label>
+      <label>メンターとして指名する人<span class="req">★</span><span class="hint">（店舗責任者が指名・1か月間の相談役）</span></label>
+      <input type="text" id="mentorName" placeholder="例：山田　太郎" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>生年月日<span class="req">★</span></label>
+      <input type="date" id="birthDate">
+    </div>
+    <div class="form-group">
+      <label>プライベートメールアドレス<span class="req">★</span><span class="hint">（PCアドレス不可）</span></label>
       <input type="email" id="emailPersonal" placeholder="例：hanako@gmail.com" maxlength="200" autocomplete="email">
     </div>
 
@@ -188,24 +199,160 @@
       <input type="date" id="hireDate">
     </div>
     <div class="form-group">
-      <label>転換後の予定雇用形態<span class="hint">（試用期間後）</span></label>
-      <input type="text" id="conversionPlannedType" placeholder="例：40時間正社員" list="convTypeList" maxlength="100">
-      <datalist id="convTypeList">
-        <option value="40時間正社員">
-        <option value="30時間正社員">
-        <option value="30時間時短社員">
-        <option value="業務委託">
-      </datalist>
+      <label>雇用形態（転換後の予定雇用形態）<span class="req">★</span><span class="hint">（業務委託を選ぶと正社員専用項目は自動で「不要」になります）</span></label>
+      <select id="conversionPlannedType" onchange="toggleFulltimeOnly()">
+        <option value="">選択してください</option>
+        <option value="40時間正社員">40時間正社員</option>
+        <option value="30時間正社員">30時間正社員</option>
+        <option value="30時間時短社員">30時間時短社員</option>
+        <option value="業務委託">業務委託</option>
+      </select>
+    </div>
+    <div class="form-group fulltime-only" id="trialPeriodGroup">
+      <label>試用期間<span class="hint">（例：12月1日 〜 5月末（予定）／業務委託は自動入力）</span></label>
+      <input type="text" id="trialPeriod" placeholder="例：12月1日 〜 5月末（予定）" maxlength="200">
+    </div>
+
+    <!-- KOT情報 -->
+    <div class="section-title">KOT情報</div>
+
+    <div class="form-group fulltime-only" id="kotSchedulePatternGroup">
+      <label>スケジュールパターン<span class="hint">（例：9:00〜18:00／労働条件通知書の始業・終業時刻にも反映）</span></label>
+      <input type="text" id="kotSchedulePattern" placeholder="例：9:00〜18:00" maxlength="100">
+    </div>
+    <div class="form-group fulltime-only" id="kotWorkDaysGroup">
+      <label>出勤日<span class="hint">（曜日固定でない場合は空欄可・例：月火水木金）</span></label>
+      <input type="text" id="kotWorkDays" placeholder="例：月火水木金" maxlength="50">
+    </div>
+
+    <!-- 必要備品 -->
+    <div class="section-title">必要備品</div>
+
+    <div class="form-group">
+      <label>新規携帯の購入<span class="req">★</span></label>
+      <select id="mobilePurchase">
+        <option value="">選択してください</option>
+        <option value="要">要</option>
+        <option value="不要">不要</option>
+      </select>
     </div>
     <div class="form-group">
-      <label>試用期間<span class="hint">（例：12月1日 〜 5月末（予定））</span></label>
-      <input type="text" id="trialPeriod" placeholder="例：12月1日 〜 5月末（予定）" maxlength="200">
+      <label>Musubi追加機械購入<span class="req">★</span></label>
+      <select id="musubiDevicePurchase">
+        <option value="">選択してください</option>
+        <option value="要">要</option>
+        <option value="不要">不要</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Musubi登録<span class="req">★</span><span class="hint">（原則薬剤師のみ）</span></label>
+      <select id="musubiRegistration">
+        <option value="">選択してください</option>
+        <option value="必要">必要</option>
+        <option value="不要">不要</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>ユニフォーム発注<span class="req">★</span></label>
+      <select id="uniformOrder" onchange="toggleConditional('uniformOrder','必要','uniformTypeGroup')">
+        <option value="">選択してください</option>
+        <option value="必要">必要</option>
+        <option value="不要">不要</option>
+      </select>
+    </div>
+    <div class="form-group conditional" id="uniformTypeGroup">
+      <label>ユニフォームの選択<span class="req">★</span></label>
+      <select id="uniformType">
+        <option value="">選択してください</option>
+        <option value="一般職 女性用ユニフォーム">一般職 女性用ユニフォーム</option>
+        <option value="一般職 男性用ユニフォーム">一般職 男性用ユニフォーム</option>
+        <option value="薬剤師 男女共通ユニフォーム（そろえるアリーナでの購入）">薬剤師 男女共通ユニフォーム（そろえるアリーナでの購入）</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>名刺発注<span class="req">★</span><span class="hint">（訪問薬剤師は作成・到着まで時間がかかります）</span></label>
+      <select id="businessCardOrder">
+        <option value="">選択してください</option>
+        <option value="必要">必要</option>
+        <option value="不要">不要</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>タイムズの登録<span class="req">★</span><span class="hint">（車の運転がある場合は必ず登録）</span></label>
+      <select id="timesRegistration">
+        <option value="">選択してください</option>
+        <option value="必要">必要</option>
+        <option value="不要">不要</option>
+      </select>
+    </div>
+
+    <!-- 労働条件通知書 -->
+    <div class="section-title">労働条件通知書<span class="hint">（業務委託の場合は対象外＝自動入力）</span></div>
+
+    <div class="form-group fulltime-only" id="jobCategoryGroup">
+      <label>職種<span class="req">★</span></label>
+      <select id="jobCategory">
+        <option value="">選択してください</option>
+        <option value="一般職（アルバイト・パート）">一般職（アルバイト・パート）</option>
+        <option value="薬剤師（アルバイト・パート）">薬剤師（アルバイト・パート）</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="form-group fulltime-only" id="workLocationsGroup">
+      <label>勤務する場所<span class="req">★</span><span class="hint">（地域限定でない場合は勤務可能性のある全店を選択）</span></label>
+      <div id="workLocationsBox" style="display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 0;">
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="つなぐ薬局 足立" style="width:auto;">つなぐ薬局 足立</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="つなぐ薬局 柏" style="width:auto;">つなぐ薬局 柏</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="つなぐ薬局 さくら台" style="width:auto;">つなぐ薬局 さくら台</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="つなぐ薬局 我孫子" style="width:auto;">つなぐ薬局 我孫子</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="ながれやま薬局" style="width:auto;">ながれやま薬局</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="アイ調剤薬局" style="width:auto;">アイ調剤薬局</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="はぐくみ薬局 越谷" style="width:auto;">はぐくみ薬局 越谷</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="はぐくみ薬局 清瀬" style="width:auto;">はぐくみ薬局 清瀬</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="本部" style="width:auto;">本部</label>
+        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="workLocationCb" value="管理部" style="width:auto;">管理部</label>
+      </div>
+      <input type="hidden" id="workLocations">
+    </div>
+    <div class="form-group fulltime-only" id="jobDutyContentGroup">
+      <label>従事すべき業務の内容<span class="req">★</span></label>
+      <select id="jobDutyContent">
+        <option value="">選択してください</option>
+        <option value="調剤業務・在宅患者訪問薬剤管理指導業務・その他付随業務">調剤業務・在宅患者訪問薬剤管理指導業務・その他付随業務</option>
+        <option value="調剤事務・調剤補助業務・その他付随業務">調剤事務・調剤補助業務・その他付随業務</option>
+        <option value="人事、給与計算、社内規定管理、その他管理業務全般">人事、給与計算、社内規定管理、その他管理業務全般</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="form-group fulltime-only" id="workHoursTypeGroup">
+      <label>始業・終業の時刻<span class="req">★</span></label>
+      <select id="workHoursType">
+        <option value="">選択してください</option>
+        <option value="始業・終業の時刻等（シフトによる）">始業・終業の時刻等（シフトによる）</option>
+        <option value="始業・終業の時刻等（出勤日は協議の上定める）">始業・終業の時刻等（出勤日は協議の上定める）</option>
+        <option value="始業・終業の時刻等（勤務日・勤務時間は協議の上で決定）">始業・終業の時刻等（勤務日・勤務時間は協議の上で決定）</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="form-group fulltime-only" id="weeklyWorkHoursGroup">
+      <label>週の勤務予定時間<span class="req">★</span><span class="hint">（例：週20時間）</span></label>
+      <input type="text" id="weeklyWorkHours" placeholder="例：週20時間" maxlength="50">
+    </div>
+    <div class="form-group fulltime-only" id="breakTimeGroup">
+      <label>休憩時間<span class="req">★</span></label>
+      <select id="breakTime">
+        <option value="">選択してください</option>
+        <option value="60分">60分</option>
+        <option value="45分">45分</option>
+        <option value="0分">0分</option>
+        <option value="その他">その他</option>
+      </select>
     </div>
 
     <!-- キャリアアップ -->
     <div class="section-title">キャリアアップ</div>
 
-    <div class="form-group">
+    <div class="form-group fulltime-only" id="careerUpGroup">
       <label>キャリアアップの有無</label>
       <select id="careerUp" onchange="toggleConditional('careerUp','有','careerUpDateGroup')">
         <option value="">選択してください</option>
@@ -218,8 +365,8 @@
       <input type="date" id="careerUpDate">
     </div>
 
-    <!-- お祝い金 -->
-    <div class="section-title">お祝い金</div>
+    <!-- お祝い金・紹介 -->
+    <div class="section-title">お祝い金・紹介</div>
 
     <div class="form-group">
       <label>お祝い金の有無</label>
@@ -233,6 +380,30 @@
       <label>お祝い金の支給条件</label>
       <textarea id="celebrationMoneyCondition" placeholder="例：有給消化中に来てもらっているバイト代としてお祝い金を支給" maxlength="500"></textarea>
     </div>
+    <div class="form-group">
+      <label>リファラル採用について<span class="req">★</span></label>
+      <select id="referralType" onchange="toggleConditional('referralType','あり','referrerNameGroup',true)">
+        <option value="">選択してください</option>
+        <option value="あり【薬剤師（週40時間勤務）→紹介した方：20万円／紹介された方：10万円】">あり【薬剤師（週40時間勤務）→紹介した方：20万円／紹介された方：10万円】</option>
+        <option value="あり【薬剤師（週30時間以上40未満）→紹介した方：7万／紹介された方：3万円】">あり【薬剤師（週30時間以上40未満）→紹介した方：7万／紹介された方：3万円】</option>
+        <option value="あり【一般職（週40時間）→紹介した方：8万／紹介された方：2万円】">あり【一般職（週40時間）→紹介した方：8万／紹介された方：2万円】</option>
+        <option value="なし">なし</option>
+      </select>
+    </div>
+    <div class="form-group conditional" id="referrerNameGroup">
+      <label>紹介者の氏名</label>
+      <input type="text" id="referrerName" placeholder="例：山田　太郎" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>直接応募お祝い金制度について<span class="req">★</span><span class="hint">（HP・電話応募・ハローワーク経由等）</span></label>
+      <select id="directApplyBonus">
+        <option value="">選択してください</option>
+        <option value="薬剤師（週40時間勤務）：30万円">薬剤師（週40時間勤務）：30万円</option>
+        <option value="薬剤師（週30時間以上40時間未満勤務）：10万円">薬剤師（週30時間以上40時間未満勤務）：10万円</option>
+        <option value="一般職：10万円">一般職：10万円</option>
+        <option value="なし">なし</option>
+      </select>
+    </div>
 
     <!-- 入力者情報 -->
     <div class="section-title">入力者情報</div>
@@ -242,7 +413,7 @@
       <input type="text" id="submittedBy" placeholder="例：山内 慶太（入力した責任者のお名前）" maxlength="100">
     </div>
     <div class="form-group">
-      <label>備考</label>
+      <label>備考<span class="hint">（その他共有事項があればご記入ください）</span></label>
       <textarea id="note" placeholder="特記事項があればご記入ください" maxlength="500"></textarea>
     </div>
 
@@ -271,8 +442,10 @@
   const db = firebase.firestore();
 
   // ===== 条件表示トグル =====
-  function toggleConditional(selectId, showValue, groupId) {
-    const show = document.getElementById(selectId).value === showValue;
+  // startsWith=true の場合、selectの値が showValue で始まるかどうかで判定（リファラル採用の複数パターン対応）
+  function toggleConditional(selectId, showValue, groupId, startsWith) {
+    const v = document.getElementById(selectId).value;
+    const show = startsWith ? v.startsWith(showValue) : v === showValue;
     document.getElementById(groupId).classList.toggle('show', show);
     if (!show) {
       // 非表示になったフィールドをクリア
@@ -281,6 +454,46 @@
     }
   }
 
+  // ===== 正社員専用項目トグル（雇用形態=業務委託のとき自動で「業務委託のため不要」を埋めて無効化）=====
+  const FULLTIME_ONLY_TEXT_IDS   = ['trialPeriod','kotSchedulePattern','kotWorkDays','weeklyWorkHours'];
+  const FULLTIME_ONLY_SELECT_IDS = ['jobCategory','jobDutyContent','workHoursType','breakTime'];
+  const FULLTIME_ONLY_AUTO_TEXT  = '業務委託のため不要';
+  function toggleFulltimeOnly() {
+    const isGyoumuItaku = getVal('conversionPlannedType') === '業務委託';
+    FULLTIME_ONLY_TEXT_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (isGyoumuItaku) { el.value = FULLTIME_ONLY_AUTO_TEXT; el.readOnly = true; }
+      else { el.readOnly = false; if (el.value === FULLTIME_ONLY_AUTO_TEXT) el.value = ''; }
+    });
+    FULLTIME_ONLY_SELECT_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      let opt = Array.from(el.options).find(o => o.value === FULLTIME_ONLY_AUTO_TEXT);
+      if (!opt) { opt = document.createElement('option'); opt.value = FULLTIME_ONLY_AUTO_TEXT; opt.textContent = FULLTIME_ONLY_AUTO_TEXT; el.appendChild(opt); }
+      if (isGyoumuItaku) { el.value = FULLTIME_ONLY_AUTO_TEXT; el.disabled = true; }
+      else { el.disabled = false; if (el.value === FULLTIME_ONLY_AUTO_TEXT) el.value = ''; }
+    });
+    // 勤務する場所（チェックボックス群）
+    const wlBox = document.getElementById('workLocationsBox');
+    if (wlBox) {
+      wlBox.querySelectorAll('.workLocationCb').forEach(cb => { cb.disabled = isGyoumuItaku; if (isGyoumuItaku) cb.checked = false; });
+      document.getElementById('workLocations').value = isGyoumuItaku ? FULLTIME_ONLY_AUTO_TEXT : buildWorkLocationsValue();
+    }
+    document.querySelectorAll('.fulltime-only').forEach(el => el.classList.toggle('is-contract', isGyoumuItaku));
+  }
+
+  // ===== 勤務する場所チェックボックス ⇔ hidden #workLocations 同期 =====
+  function buildWorkLocationsValue() {
+    return Array.from(document.querySelectorAll('.workLocationCb:checked')).map(cb => cb.value).join('、');
+  }
+  function syncWorkLocationsHidden() {
+    document.getElementById('workLocations').value = buildWorkLocationsValue();
+  }
+  function applyWorkLocationsFromValue(v) {
+    const set = new Set(String(v || '').split('、').map(s => s.trim()).filter(Boolean));
+    document.querySelectorAll('.workLocationCb').forEach(cb => { cb.checked = set.has(cb.value); });
+  }
   // ===== ユーティリティ =====
   function getVal(id) {
     return (document.getElementById(id).value || '').trim();
@@ -295,16 +508,46 @@
   // ===== バリデーション =====
   const REQUIRED = {
     name:          '氏名（漢字）',
+    mentorName:    'メンターとして指名する人',
+    birthDate:     '生年月日',
     emailPersonal: 'プライベートメールアドレス',
     store:         '所属（店舗）',
     hireDate:      '入社日',
+    conversionPlannedType: '雇用形態（転換後の予定雇用形態）',
+    mobilePurchase: '新規携帯の購入',
+    musubiDevicePurchase: 'Musubi追加機械購入',
+    musubiRegistration: 'Musubi登録',
+    uniformOrder:  'ユニフォーム発注',
+    businessCardOrder: '名刺発注',
+    timesRegistration: 'タイムズの登録',
+    referralType:  'リファラル採用について',
+    directApplyBonus: '直接応募お祝い金制度について',
     submittedBy:   '入力者名（責任者）',
   };
+  // 雇用形態=業務委託のときは対象外（validate内でスキップ）
   function validate() {
+    const isGyoumuItaku = getVal('conversionPlannedType') === '業務委託';
     for (const [id, label] of Object.entries(REQUIRED)) {
+      if (isGyoumuItaku && FULLTIME_ONLY_TEXT_IDS.concat(FULLTIME_ONLY_SELECT_IDS).includes(id)) continue;
       if (!getVal(id)) {
         showMsg('「' + label + '」は必須です。', 'error');
         document.getElementById(id).focus();
+        return false;
+      }
+    }
+    if (!isGyoumuItaku) {
+      for (const [id, label] of Object.entries({
+        jobCategory: '職種', jobDutyContent: '従事すべき業務の内容',
+        workHoursType: '始業・終業の時刻', weeklyWorkHours: '週の勤務予定時間', breakTime: '休憩時間',
+      })) {
+        if (!getVal(id)) {
+          showMsg('「' + label + '」は必須です。', 'error');
+          document.getElementById(id).focus();
+          return false;
+        }
+      }
+      if (!getVal('workLocations')) {
+        showMsg('「勤務する場所」を1つ以上選択してください。', 'error');
         return false;
       }
     }
@@ -319,6 +562,16 @@
       document.getElementById('careerUpDate').focus();
       return false;
     }
+    if (getVal('referralType').startsWith('あり') && !getVal('referrerName')) {
+      showMsg('紹介者の氏名を入力してください。', 'error');
+      document.getElementById('referrerName').focus();
+      return false;
+    }
+    if (getVal('uniformOrder') === '必要' && !getVal('uniformType')) {
+      showMsg('ユニフォームの選択をしてください。', 'error');
+      document.getElementById('uniformType').focus();
+      return false;
+    }
     return true;
   }
 
@@ -326,10 +579,15 @@
   // 値は .value への代入のみ（HTMLとして解釈されないためXSS安全）。責任者は送信前に自由に修正できる
 
   const FORM_FIELDS = [
-    'name','kana','emailPersonal','store','jobType','position',
+    'name','kana','mentorName','birthDate','emailPersonal','store','jobType','position',
     'hireDate','conversionPlannedType','trialPeriod',
+    'kotSchedulePattern','kotWorkDays',
+    'mobilePurchase','musubiDevicePurchase','musubiRegistration',
+    'uniformOrder','uniformType','businessCardOrder','timesRegistration',
+    'jobCategory','workLocations','jobDutyContent','workHoursType','weeklyWorkHours','breakTime',
     'careerUp','careerUpDate',
     'celebrationMoney','celebrationMoneyCondition',
+    'referralType','referrerName','directApplyBonus',
     'submittedBy','note',
   ];
 
@@ -388,8 +646,13 @@
         el.value = String(v).slice(0, max);
       });
       // 条件表示欄を反映
+      applyWorkLocationsFromValue(d.workLocations);
+      document.querySelectorAll('.workLocationCb').forEach(cb => cb.addEventListener('change', syncWorkLocationsHidden));
       toggleConditional('careerUp', '有', 'careerUpDateGroup');
       toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
+      toggleConditional('uniformOrder', '必要', 'uniformTypeGroup');
+      toggleConditional('referralType', 'あり', 'referrerNameGroup', true);
+      toggleFulltimeOnly();
 
       // 送信処理を編集モード用に差し替え
       // — add() ではなく doc(id).update() でフォーム項目のみ更新
@@ -441,9 +704,14 @@
         el.value = v.slice(0, max);
         if (el.value) filled++;
       });
-      // 「有」選択時の追加欄（予定日・支給条件）の表示状態を反映
+      // 「有」選択時の追加欄（予定日・支給条件等）の表示状態を反映
+      applyWorkLocationsFromValue(params.get('workLocations'));
+      document.querySelectorAll('.workLocationCb').forEach(cb => cb.addEventListener('change', syncWorkLocationsHidden));
       toggleConditional('careerUp', '有', 'careerUpDateGroup');
       toggleConditional('celebrationMoney', '有', 'celebrationCondGroup');
+      toggleConditional('uniformOrder', '必要', 'uniformTypeGroup');
+      toggleConditional('referralType', 'あり', 'referrerNameGroup', true);
+      toggleFulltimeOnly();
       if (filled > 0) showMsg('リンクから ' + filled + ' 項目を自動入力しました。内容をご確認・修正のうえ送信してください。', 'success');
     })();
 

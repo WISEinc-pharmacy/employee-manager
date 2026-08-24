@@ -53,10 +53,15 @@ service cloud.firestore {
       allow update: if resource.data.status == 'pending'
                     && request.resource.data.status == 'pending'
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                         'name','kana','emailPersonal','jobType','store','position',
+                         'name','kana','mentorName','birthDate','emailPersonal','jobType','store','position',
                          'hireDate','conversionPlannedType','trialPeriod',
+                         'kotSchedulePattern','kotWorkDays',
+                         'mobilePurchase','musubiDevicePurchase','musubiRegistration',
+                         'uniformOrder','uniformType','businessCardOrder','timesRegistration',
+                         'jobCategory','workLocations','jobDutyContent','workHoursType','weeklyWorkHours','breakTime',
                          'careerUp','careerUpDate',
                          'celebrationMoney','celebrationMoneyCondition',
+                         'referralType','referrerName','directApplyBonus',
                          'submittedBy','note','completedAt'
                        ])
                     && isValidIntakeEdit(request.resource.data);
@@ -70,10 +75,15 @@ service cloud.firestore {
     // isValidIntake: intake_form(新規create)用バリデーション
     function isValidIntake(d) {
       return d.keys().hasOnly([
-          'name','kana','emailPersonal','jobType','store','position',
+          'name','kana','mentorName','birthDate','emailPersonal','jobType','store','position',
           'hireDate','conversionPlannedType','trialPeriod',
+          'kotSchedulePattern','kotWorkDays',
+          'mobilePurchase','musubiDevicePurchase','musubiRegistration',
+          'uniformOrder','uniformType','businessCardOrder','timesRegistration',
+          'jobCategory','workLocations','jobDutyContent','workHoursType','weeklyWorkHours','breakTime',
           'careerUp','careerUpDate',
           'celebrationMoney','celebrationMoneyCondition',
+          'referralType','referrerName','directApplyBonus',
           'submittedBy','note','status','source','submittedAt'
         ])
         && d.status == 'pending'
@@ -91,10 +101,15 @@ service cloud.firestore {
     // — completedAt はサーバータイムスタンプとして許可
     function isValidIntakeEdit(d) {
       return d.keys().hasOnly([
-          'name','kana','emailPersonal','jobType','store','position',
+          'name','kana','mentorName','birthDate','emailPersonal','jobType','store','position',
           'hireDate','conversionPlannedType','trialPeriod',
+          'kotSchedulePattern','kotWorkDays',
+          'mobilePurchase','musubiDevicePurchase','musubiRegistration',
+          'uniformOrder','uniformType','businessCardOrder','timesRegistration',
+          'jobCategory','workLocations','jobDutyContent','workHoursType','weeklyWorkHours','breakTime',
           'careerUp','careerUpDate',
           'celebrationMoney','celebrationMoneyCondition',
+          'referralType','referrerName','directApplyBonus',
           'submittedBy','note','status','source','submittedAt',
           'completedAt','recruitGmailThreadId','recruitSlackTs'
         ])

@@ -1704,7 +1704,16 @@ async function approveIntake(docId) {
   intakeBusy = true;
   try {
     const emp = {};
-    ['name', 'kana', 'jobType', 'store', 'hireDate', 'conversionPlannedType', 'trialPeriod', 'celebrationMoney', 'celebrationMoneyCondition'].forEach(k => { if (d[k]) emp[k] = d[k]; });
+    [
+      'name', 'kana', 'jobType', 'store', 'hireDate', 'conversionPlannedType', 'trialPeriod',
+      'celebrationMoney', 'celebrationMoneyCondition',
+      'mentorName', 'birthDate',
+      'kotSchedulePattern', 'kotWorkDays',
+      'mobilePurchase', 'musubiDevicePurchase', 'musubiRegistration',
+      'uniformOrder', 'uniformType', 'businessCardOrder', 'timesRegistration',
+      'jobCategory', 'workLocations', 'jobDutyContent', 'workHoursType', 'weeklyWorkHours', 'breakTime',
+      'referralType', 'referrerName', 'directApplyBonus',
+    ].forEach(k => { if (d[k]) emp[k] = d[k]; });
     if (d.emailPersonal) { emp.emailPersonal = d.emailPersonal; emp.personalEmail = d.emailPersonal; } // ダッシュボードはemailPersonal・ES BotはpersonalEmailを参照するため両方書く
     emp.position = (d.position && d.position !== 'なし') ? d.position : '';
     if (d.careerUp === '有' && d.careerUpDate) emp.careerUpDate = d.careerUpDate;
