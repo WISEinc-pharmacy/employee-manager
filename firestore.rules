@@ -111,7 +111,8 @@ service cloud.firestore {
           'celebrationMoney','celebrationMoneyCondition',
           'referralType','referrerName','directApplyBonus',
           'submittedBy','note','status','source','submittedAt',
-          'completedAt','recruitGmailThreadId','recruitSlackTs'
+          'completedAt','recruitGmailThreadId','recruitSlackTs',
+          'notifiedPending','notifiedPendingAt'
         ])
         && d.status == 'pending'
         && d.name is string && d.name.size() > 0 && d.name.size() < 100
