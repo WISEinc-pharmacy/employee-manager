@@ -89,6 +89,10 @@ body.role-viewer .sensitive-col { display: none !important; }
 .check-mark { color: var(--color-success); font-weight: bold; }
 .overdue { color: var(--color-danger); font-weight: bold; }
 .upcoming { color: var(--color-warn); font-weight: bold; }
+.table-wrap thead th.sortable { cursor: pointer; user-select: none; }
+.table-wrap thead th.sortable:hover { background: #3d566e; }
+.table-wrap thead th.sortable .sort-indicator { margin-left: 4px; opacity: 0.7; }
+.mgmt-pharm-badge { background: #e8f4fd; color: #1a5276; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 
 /* ===== モーダル ===== */
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 40px; overflow-y: auto; }
@@ -212,7 +216,7 @@ body.role-viewer .sensitive-col { display: none !important; }
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th>入社日</th><th>勤続年数</th><th>年齢</th><th>ステータス</th>
+          <th>氏名</th><th>フリガナ</th><th>店舗</th><th>職種</th><th>雇用形態</th><th>役職</th><th class="sortable" onclick="toggleEmpSort('hireDate')">入社日<span class="sort-indicator" id="sortInd_hireDate"></span></th><th>正社員切替</th><th>勤続年数</th><th>年齢</th><th>ステータス</th>
           <th class="sensitive-col">生年月日</th><th>携帯番号</th><th>会社メール</th><th>個人メール</th><th>郵便番号</th><th>住所</th><th>勤務時間</th>
           <th>転換確認</th><th>労働通知書</th><th>産休/育休</th><th>雇用保険番号</th><th>薬剤師免許番号</th><th>免許期限</th>
           <th>KOT番号</th><th class="sensitive-col">残業(先月)<span class="src-badge src-kot">KOT</span></th><th class="sensitive-col">有給取得率<span class="src-badge src-kot">KOT</span></th><th>KOT</th><th>タイムズ</th><th>ムスビ</th><th>チケット</th><th>店舗キー</th><th>名刺</th><th>携帯</th><th>印鑑</th><th class="sensitive-col">マイナンバー</th>
@@ -641,6 +645,53 @@ function renderStats() {
   `;
 }
 
+// ===== 一覧ソート状態（関根さん要望 0EuqSMIRg9yvrcOfBdnc・8/26）=====
+// デフォルト: 入社日 降順（新しい人が上）。列ヘッダクリックで昇順/降順トグル
+let empSortColumn = 'hireDate';
+let empSortDir = 'desc';
+
+function toggleEmpSort(col) {
+  if (empSortColumn === col) {
+    empSortDir = empSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    empSortColumn = col;
+    empSortDir = 'desc';
+  }
+  renderTable();
+}
+
+function updateEmpSortIndicators() {
+  const ind = document.getElementById('sortInd_hireDate');
+  if (!ind) return;
+  ind.textContent = empSortColumn === 'hireDate' ? (empSortDir === 'asc' ? '▲' : '▼') : '';
+}
+
+function sortEmployees(list) {
+  const col = empSortColumn;
+  const dir = empSortDir === 'asc' ? 1 : -1;
+  return [...list].sort((a, b) => {
+    const av = a[col] || '';
+    const bv = b[col] || '';
+    // 欠損（空値）は常に末尾へ（ソート方向によらない）
+    if (!av && !bv) return (a.kana || '').localeCompare(b.kana || '', 'ja');
+    if (!av) return 1;
+    if (!bv) return -1;
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return (a.kana || '').localeCompare(b.kana || '', 'ja');
+  });
+}
+
+// 正社員切替の表示（実測に基づき選定: conversionDate=既存の「正社員転換」リマインド節目日として
+// 全社員TYPES配列で使われている canonical フィールド・85%充足。conversionPlannedType=転換後の
+// 予定雇用形態・12%充足のため補足情報として併記。両方欠損時は「-」）
+function convSwitchText(e) {
+  const parts = [];
+  if (e.conversionDate) parts.push(esc(e.conversionDate));
+  if (e.conversionPlannedType) parts.push(esc(e.conversionPlannedType));
+  return parts.length ? parts.join(' → ') : '-';
+}
+
 function renderTable() {
   const search = document.getElementById('searchInput').value.toLowerCase();
   const store = document.getElementById('filterStore').value;
@@ -652,6 +703,7 @@ function renderTable() {
   if (search) filtered = filtered.filter(e =>
     (e.name || '').toLowerCase().includes(search) || (e.kana || '').toLowerCase().includes(search)
   );
+  filtered = sortEmployees(filtered);
 
   const today = new Date().toISOString().slice(0, 10);
   const tbody = document.getElementById('empTableBody');
@@ -666,8 +718,9 @@ function renderTable() {
       <td>${esc(e.store)}</td>
       <td>${esc(e.jobType)}</td>
       <td>${esc(e.employmentType)}</td>
-      <td>${esc(e.position)}</td>
+      <td>${e.position === '管理薬剤師' ? `<span class="mgmt-pharm-badge">${esc(e.position)}</span>` : esc(e.position)}</td>
       <td>${esc(e.hireDate)}</td>
+      <td>${convSwitchText(e)}</td>
       <td>${calcTenure(e.hireDate)}</td>
       <td>${calcAge(e.birthDate)}</td>
       <td><span class="status-badge status-${e.status || '在籍'}">${e.status || '在籍'}</span></td>
@@ -703,6 +756,7 @@ function renderTable() {
     </tr>`;
   }).join('');
   document.getElementById('tableCount').textContent = `${filtered.length}件表示 / 全${employees.length}件`;
+  updateEmpSortIndicators();
 }
 
 function dateStatus(dateStr, today) {
