@@ -112,7 +112,8 @@ service cloud.firestore {
           'referralType','referrerName','directApplyBonus',
           'submittedBy','note','status','source','submittedAt',
           'completedAt','recruitGmailThreadId','recruitSlackTs',
-          'notifiedPending','notifiedPendingAt'
+          'notifiedPending','notifiedPendingAt',
+          'notifiedSubmitted','notifiedSubmittedAt'
         ])
         && d.status == 'pending'
         && d.name is string && d.name.size() > 0 && d.name.size() < 100
