@@ -718,7 +718,7 @@ function renderTable() {
       <td>${esc(e.store)}</td>
       <td>${esc(e.jobType)}</td>
       <td>${esc(e.employmentType)}</td>
-      <td>${e.position === '管理薬剤師' ? `<span class="mgmt-pharm-badge">${esc(e.position)}</span>` : esc(e.position)}</td>
+      <td>${e.position && e.position.includes('管理薬剤師') ? `<span class="mgmt-pharm-badge">${esc(e.position)}</span>` : esc(e.position)}</td>
       <td>${esc(e.hireDate)}</td>
       <td>${convSwitchText(e)}</td>
       <td>${calcTenure(e.hireDate)}</td>
