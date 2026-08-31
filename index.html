@@ -1684,6 +1684,7 @@ async function renderIntakeTab() {
     const submitted = (d.submittedAt && d.submittedAt.toDate) ? d.submittedAt.toDate().toLocaleString('ja-JP') : '';
     const dupe = findIntakeDuplicate(d);
     const isRecruitAuto = d.source === 'recruit_auto';
+    const notCompleted = !isIntakeCompleted(d); // completedAt未設定＝店舗責任者の記入未完了（INC: 8/28未記入2doc誤承認）
     // 編集リンク（?doc=docId）のURLをコピーするボタン
     const editUrl = location.origin + location.pathname.replace('index.html', '') + 'intake.html?doc=' + encodeURIComponent(d.id);
     html += `
@@ -1694,6 +1695,7 @@ async function renderIntakeTab() {
           <span style="background:#e0e7ff;color:#3730a3;border-radius:10px;padding:2px 10px;font-size:12px;">${esc(d.store || '')}</span>
           ${isRecruitAuto ? `<span style="background:#fef9c3;color:#854d0e;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;">採用DB連携</span>` : ''}
           ${dupe ? `<span style="background:#fee2e2;color:#991b1b;border-radius:10px;padding:2px 10px;font-size:12px;">⚠️ 同名/同メールの社員あり</span>` : ''}
+          ${notCompleted ? `<span style="background:#fef3c7;color:#92400e;border-radius:10px;padding:2px 10px;font-size:12px;">📝 記入待ち</span>` : ''}
         </div>
         <table style="font-size:13px;margin-top:10px;border-collapse:collapse;">
           ${row('私用メール', d.emailPersonal)}
@@ -1709,7 +1711,9 @@ async function renderIntakeTab() {
           ${row('送信日時', submitted)}
         </table>
         <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-success btn-sm" onclick="approveIntake('${esc(d.id)}')">✓ 承認して社員登録</button>
+          ${notCompleted
+            ? `<button class="btn btn-success btn-sm" disabled title="店舗責任者の記入が完了していないため承認できません" style="opacity:0.5;cursor:not-allowed;">✓ 承認して社員登録</button>`
+            : `<button class="btn btn-success btn-sm" onclick="approveIntake('${esc(d.id)}')">✓ 承認して社員登録</button>`}
           <button class="btn btn-danger btn-sm" onclick="rejectIntake('${esc(d.id)}')">✗ 却下</button>
           ${isRecruitAuto ? `<button class="btn btn-outline btn-sm" onclick="copyIntakeEditLink('${esc(d.id)}', this)" title="店舗責任者へ送る編集URLをコピー">編集URLをコピー</button>` : ''}
         </div>
@@ -1734,6 +1738,12 @@ function copyIntakeEditLink(docId, btn) {
   }
 }
 
+// completedAt はintake.html編集モードのsubmitハンドラのみが書く確定マーカー（es_bot.mjs isIntakeActuallySubmitted()と同じ判定基準）。
+// 発行直後（status:pending・店舗責任者未記入）はcompletedAtが存在しないため、これが無いdocは承認不可。
+function isIntakeCompleted(d) {
+  return !!(d && d.completedAt);
+}
+
 function findIntakeDuplicate(d) {
   const nm = (d.name || '').replace(/\s/g, '');
   const em = (d.emailPersonal || '').toLowerCase().trim();
@@ -1748,6 +1758,7 @@ async function approveIntake(docId) {
   if (!(userRole === 'admin' || userRole === 'editor')) return;
   const d = intakePendingDocs.find(x => x.id === docId);
   if (!d) return alert('申請データが見つかりません。ページを再読み込みしてください。');
+  if (!isIntakeCompleted(d)) return alert('⚠️ 店舗責任者の記入が完了していないため承認できません（記入待ち）。');
 
   const dupe = findIntakeDuplicate(d);
   if (dupe && !confirm(`⚠️ 同名または同メールの社員が既に登録されています（${dupe.name} / ${dupe.store || '店舗未設定'}）。\n重複登録になる可能性があります。それでも続行しますか？`)) return;
