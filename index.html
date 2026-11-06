@@ -115,6 +115,12 @@ body.role-viewer .sensitive-col { display: none !important; }
 .form-group textarea { resize: vertical; min-height: 60px; }
 .form-grid-2 { grid-template-columns: repeat(2, 1fr); }
 .form-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.cert-grid { display: grid; gap: 10px; }
+.cert-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr); gap: 12px; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; }
+.cert-expiry-status { min-height: 16px; font-size: 12px; font-weight: 600; }
+.cert-expiry-status.expired { color: var(--color-danger); }
+.cert-expiry-status.soon { color: var(--color-warn); }
+@media (max-width: 600px) { .cert-row { grid-template-columns: 1fr; } }
 
 /* ===== チェックボックス群 ===== */
 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
@@ -315,6 +321,22 @@ body.role-viewer .sensitive-col { display: none !important; }
       <button class="btn btn-outline" onclick="closeModal('empModal')">キャンセル</button>
       <button class="btn btn-primary" id="btnSaveEmp" onclick="saveEmployee()">保存</button>
       <button class="btn btn-danger btn-sm" id="btnDeleteEmp" style="display:none;" onclick="deleteEmployee()">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 入社受付・重複候補モーダル ===== -->
+<div class="modal-overlay" id="intakeDupeModal">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <h3>同じ人かもしれない社員が登録されています</h3>
+      <button class="modal-close" onclick="closeIntakeDupeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="intakeDupeModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="btnIntakeDupeCancel" onclick="closeIntakeDupeModal()">キャンセル</button>
+      <button class="btn btn-outline" id="btnIntakeDupeNew" onclick="approveIntakeAsNew()">別人として新規作成する</button>
+      <button class="btn btn-primary" id="btnIntakeDupeAppend" onclick="approveIntakeAppend()">選んだ社員へ追記する</button>
     </div>
   </div>
 </div>
@@ -876,6 +898,107 @@ function calcTenure(h){ if(!h)return''; const d=new Date(h); if(isNaN(d))return'
 // 西暦(YYYY-MM-DD)→和暦
 function toWareki(b){ if(!b)return''; const d=new Date(b); if(isNaN(d))return''; const eras=[{n:'令和',s:new Date('2019-05-01')},{n:'平成',s:new Date('1989-01-08')},{n:'昭和',s:new Date('1926-12-25')}]; for(const e of eras){ if(d.getTime()>=e.s.getTime()){ const yr=d.getFullYear()-e.s.getFullYear()+1; return e.n+(yr===1?'元':yr)+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; } } return ''; }
 
+// JOBTYPE-BEGIN
+const JOB_TYPE_OPTIONS = ['薬剤師', '一般職', '管理部'];
+function normalizeJobType(v) {
+  const value = v == null ? '' : String(v).trim();
+  return value === '事務' ? '一般職' : value;
+}
+function jobTypeOptionsHtml(current) {
+  const selectedValue = normalizeJobType(current);
+  const escapeOption = value => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const values = ['', ...JOB_TYPE_OPTIONS];
+  let html = values.map(value => {
+    const label = value || '-';
+    return `<option value="${escapeOption(value)}"${value === selectedValue ? ' selected' : ''}>${escapeOption(label)}</option>`;
+  }).join('');
+  if (selectedValue && !JOB_TYPE_OPTIONS.includes(selectedValue)) {
+    html += `<option value="${escapeOption(selectedValue)}" selected>（旧）${escapeOption(selectedValue)}</option>`;
+  }
+  return html;
+}
+// JOBTYPE-END
+
+// CERTS-BEGIN
+const MAX_CERTS = 8;
+function parseCertDateUtc(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+  const timestamp = Date.parse(value + 'T00:00:00Z');
+  if (!Number.isFinite(timestamp)) return NaN;
+  return new Date(timestamp).toISOString().slice(0, 10) === value ? timestamp : NaN;
+}
+function normalizeCertifications(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(row => {
+    const source = row && typeof row === 'object' ? row : {};
+    const name = source.name == null ? '' : String(source.name).trim();
+    const rawExpiry = source.expiry == null ? '' : String(source.expiry).trim();
+    return { name, rawExpiry };
+  }).filter(row => row.name || row.rawExpiry).map(row => ({
+    name: row.name,
+    expiry: Number.isFinite(parseCertDateUtc(row.rawExpiry)) ? row.rawExpiry : '',
+  })).slice(0, MAX_CERTS);
+}
+function certExpiryStatus(expiry, todayStr) {
+  if (!expiry) return 'none';
+  const expiryUtc = parseCertDateUtc(expiry);
+  const todayUtc = parseCertDateUtc(todayStr);
+  if (!Number.isFinite(expiryUtc) || !Number.isFinite(todayUtc)) return 'none';
+  const days = (expiryUtc - todayUtc) / 86400000;
+  if (days < 0) return 'expired';
+  return days <= 90 ? 'soon' : 'ok';
+}
+// CERTS-END
+
+const CERT_NAME_FIELD_IDS = [
+  'f_cert_name_0', 'f_cert_name_1', 'f_cert_name_2', 'f_cert_name_3',
+  'f_cert_name_4', 'f_cert_name_5', 'f_cert_name_6', 'f_cert_name_7',
+];
+const CERT_EXPIRY_FIELD_IDS = [
+  'f_cert_expiry_0', 'f_cert_expiry_1', 'f_cert_expiry_2', 'f_cert_expiry_3',
+  'f_cert_expiry_4', 'f_cert_expiry_5', 'f_cert_expiry_6', 'f_cert_expiry_7',
+];
+
+function certExpiryLabel(status) {
+  if (status === 'expired') return '期限切れ';
+  if (status === 'soon') return 'あと90日以内';
+  return '';
+}
+
+function currentLocalDateString() {
+  const now = new Date();
+  const year = String(now.getFullYear()).padStart(4, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function certificationRowsHtml(rows) {
+  const normalized = normalizeCertifications(rows);
+  const todayStr = currentLocalDateString();
+  return Array.from({ length: MAX_CERTS }, (_, index) => {
+    const row = normalized[index] || { name: '', expiry: '' };
+    const status = certExpiryStatus(row.expiry, todayStr);
+    return `<div class="cert-row">
+      <div class="form-group"><label>認定名 ${index + 1}</label><input type="text" id="${CERT_NAME_FIELD_IDS[index]}" value="${esc(row.name)}"></div>
+      <div class="form-group"><label>有効期限</label><input type="date" id="${CERT_EXPIRY_FIELD_IDS[index]}" value="${esc(row.expiry)}" onchange="updateCertExpiryStatus(${index})"><span id="f_cert_status_${index}" class="cert-expiry-status ${status}">${certExpiryLabel(status)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function updateCertExpiryStatus(index) {
+  const expiry = document.getElementById(CERT_EXPIRY_FIELD_IDS[index])?.value || '';
+  const status = certExpiryStatus(expiry, currentLocalDateString());
+  const statusElement = document.getElementById(`f_cert_status_${index}`);
+  if (!statusElement) return;
+  statusElement.className = `cert-expiry-status ${status}`;
+  statusElement.textContent = certExpiryLabel(status);
+}
+
 // ===== 社員モーダル =====
 function openModal(id) {
   editingId = id || null;
@@ -893,7 +1016,7 @@ function openModal(id) {
         <div class="form-group"><label>Slack ID</label><input type="text" id="f_slackId" value="${esc(e.slackId)}" placeholder="U0XXXXXXXXX"></div>
         <div class="form-group"><label>KOT番号</label><input type="text" id="f_kotNumber" value="${esc(e.kotNumber)}"></div>
         <div class="form-group"><label>店舗</label><select id="f_store">${storeOptions(e.store)}</select></div>
-        <div class="form-group"><label>職種</label><select id="f_jobType"><option value="">-</option><option ${e.jobType==='薬剤師'?'selected':''}>薬剤師</option><option ${e.jobType==='事務'?'selected':''}>事務</option><option ${e.jobType==='管理栄養士'?'selected':''}>管理栄養士</option></select></div>
+        <div class="form-group"><label>職種</label><select id="f_jobType">${jobTypeOptionsHtml(e.jobType)}</select></div>
         <div class="form-group"><label>雇用形態</label><select id="f_employmentType"><option value="">-</option><option ${e.employmentType==='正社員'?'selected':''}>正社員</option><option ${e.employmentType==='有期'?'selected':''}>有期</option><option ${e.employmentType==='パート'?'selected':''}>パート</option></select></div>
         <div class="form-group"><label>役職</label><input type="text" id="f_position" value="${esc(e.position)}"></div>
         <div class="form-group"><label>入社日</label><input type="date" id="f_hireDate" value="${e.hireDate || ''}"></div>
@@ -991,6 +1114,13 @@ function openModal(id) {
     </div>
 
     <div class="form-section">
+      <h4>薬剤師認定（最大8件）</h4>
+      <div class="cert-grid">
+        ${certificationRowsHtml(e.certifications)}
+      </div>
+    </div>
+
+    <div class="form-section">
       <h4>Driveリンク</h4>
       <div class="form-grid">
         <div class="form-group"><label>社員管理フォルダURL</label><input type="url" id="f_driveFolderUrl" value="${esc(e.driveFolderUrl)}" style="width:100%;"></div>
@@ -1067,6 +1197,9 @@ function getFormData() {
     pharmacistLicenseUrl: g('f_pharmacistLicenseUrl'), pharmacistLicenseNo: g('f_pharmacistLicenseNo'), pharmacistLicenseDate: g('f_pharmacistLicenseDate'),
     insurancePharmacistUrl: g('f_insurancePharmacistUrl'), insurancePharmacistNo: g('f_insurancePharmacistNo'), insurancePharmacistDate: g('f_insurancePharmacistDate'),
     licenseExpiry: g('f_licenseExpiry'), driveFolderUrl: (/^\s*(javascript|data|vbscript):/i.test(g('f_driveFolderUrl')) ? '' : g('f_driveFolderUrl').trim()),
+    certifications: normalizeCertifications(Array.from({ length: MAX_CERTS }, (_, index) => ({
+      name: g(CERT_NAME_FIELD_IDS[index]), expiry: g(CERT_EXPIRY_FIELD_IDS[index]),
+    }))),
     hasTimes: cb('f_hasTimes'), hasKot: cb('f_hasKot'), hasMusubi: cb('f_hasMusubi'),
     hasTicketRestaurant: cb('f_hasTicketRestaurant'), hasStoreKey: cb('f_hasStoreKey'),
     hasNameCard: cb('f_hasNameCard'), hasPhone: cb('f_hasPhone'), hasSeal: cb('f_hasSeal'), hasMynumber: cb('f_hasMynumber'),
@@ -1682,7 +1815,7 @@ async function renderIntakeTab() {
   let html = '';
   for (const d of list) {
     const submitted = (d.submittedAt && d.submittedAt.toDate) ? d.submittedAt.toDate().toLocaleString('ja-JP') : '';
-    const dupe = findIntakeDuplicate(d);
+    const dupe = findIntakeDuplicates(d, employees)[0] || null;
     const isRecruitAuto = d.source === 'recruit_auto';
     const notCompleted = !isIntakeCompleted(d); // completedAt未設定＝店舗責任者の記入未完了（INC: 8/28未記入2doc誤承認）
     // 編集リンク（?doc=docId）のURLをコピーするボタン
@@ -1744,13 +1877,251 @@ function isIntakeCompleted(d) {
   return !!(d && d.completedAt);
 }
 
-function findIntakeDuplicate(d) {
-  const nm = (d.name || '').replace(/\s/g, '');
-  const em = (d.emailPersonal || '').toLowerCase().trim();
-  return employees.find(e =>
-    (nm && (e.name || '').replace(/\s/g, '') === nm) ||
-    (em && (((e.emailPersonal || '').toLowerCase().trim() === em) || ((e.personalEmail || '').toLowerCase().trim() === em)))
-  ) || null;
+// INTAKE-APPROVE-BEGIN
+function isEmptyVal(v) {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0);
+}
+
+function findIntakeDuplicates(d, employees) {
+  const source = d || {};
+  const normalizedName = (source.name || '').replace(/\s/g, '');
+  const normalizedEmail = (source.emailPersonal || '').toLowerCase().trim();
+  return (Array.isArray(employees) ? employees : [])
+    .map((employee, index) => {
+      const reasons = [];
+      if (normalizedName && (employee.name || '').replace(/\s/g, '') === normalizedName) reasons.push('name');
+      if (normalizedEmail && [employee.emailPersonal, employee.personalEmail]
+        .some(value => (value || '').toLowerCase().trim() === normalizedEmail)) reasons.push('email');
+      return { employee, reasons, index };
+    })
+    .filter(item => item.reasons.length > 0)
+    .sort((a, b) => b.reasons.length - a.reasons.length || a.index - b.index)
+    .map(({ employee, reasons }) => ({ employee, reasons }));
+}
+
+function buildEmployeeFromIntake(d, docId) {
+  const source = d || {};
+  const built = {};
+  [
+    'name', 'kana', 'jobType', 'store', 'hireDate', 'conversionPlannedType', 'trialPeriod',
+    'celebrationMoney', 'celebrationMoneyCondition',
+    'mentorName', 'birthDate',
+    'kotSchedulePattern', 'kotWorkDays',
+    'mobilePurchase', 'musubiDevicePurchase', 'musubiRegistration',
+    'uniformOrder', 'uniformType', 'businessCardOrder', 'timesRegistration',
+    'jobCategory', 'workLocations', 'jobDutyContent', 'workHoursType', 'weeklyWorkHours', 'breakTime',
+    'referralType', 'referrerName', 'directApplyBonus',
+  ].forEach(key => { if (source[key]) built[key] = source[key]; });
+  if (source.emailPersonal) {
+    built.emailPersonal = source.emailPersonal;
+    built.personalEmail = source.emailPersonal;
+  }
+  built.position = (source.position && source.position !== 'なし') ? source.position : '';
+  if (source.careerUp === '有' && source.careerUpDate) built.careerUpDate = source.careerUpDate;
+  if (source.note) built.note2 = `【入社受付フォーム】${source.note}`;
+  built.status = '在籍';
+  built.hrThreadPending = true;
+  built.intakeDocId = docId;
+  return built;
+}
+
+function computeAppendUpdates(existing, built) {
+  const current = existing || {};
+  const incomingData = built || {};
+  const excluded = new Set(['status', 'hrThreadPending', 'createdAt', 'updatedAt', 'updatedBy', 'position', 'name', 'kana']);
+  const updates = {};
+  const skipped = [];
+  Object.keys(incomingData).forEach(key => {
+    if (excluded.has(key)) return;
+    const incoming = incomingData[key];
+    if (isEmptyVal(incoming)) return;
+    if (isEmptyVal(current[key])) updates[key] = incoming;
+    else skipped.push({ key, existing: current[key], incoming });
+  });
+  return { updates, skipped, filledKeys: Object.keys(updates) };
+}
+
+async function applyIntakeApproval(deps, d, docId, choice) {
+  if (!choice || (choice.mode !== 'new' && choice.mode !== 'append')) throw new Error('承認方法が正しくありません');
+  if (choice.mode === 'append' && !choice.targetId) throw new Error('追記先の社員を選んでください');
+
+  const built = buildEmployeeFromIntake(d, docId);
+  const employeesRef = deps.db.collection('employees');
+  const intakeRef = deps.db.collection('employeeIntake').doc(docId);
+
+  if (choice.mode === 'new') {
+    const employeeData = {
+      ...built,
+      createdAt: deps.serverTimestamp(),
+      updatedAt: deps.serverTimestamp(),
+      updatedBy: deps.userEmail,
+    };
+    const ref = await employeesRef.add(employeeData);
+    await intakeRef.update({
+      status: 'approved',
+      approvedBy: deps.userEmail,
+      approvedAt: deps.serverTimestamp(),
+      employeeId: ref.id,
+    });
+    return { mode: 'new', employeeId: ref.id };
+  }
+
+  const employeeRef = employeesRef.doc(choice.targetId);
+  const snapshot = await employeeRef.get();
+  if (!snapshot || snapshot.exists === false) throw new Error('追記先の社員データが見つかりません');
+  const latest = snapshot.data();
+  const { updates, skipped, filledKeys } = computeAppendUpdates(latest, built);
+  await employeeRef.update({
+    ...updates,
+    updatedAt: deps.serverTimestamp(),
+    updatedBy: deps.userEmail,
+  });
+  await intakeRef.update({
+    status: 'approved',
+    approvedBy: deps.userEmail,
+    approvedAt: deps.serverTimestamp(),
+    employeeId: choice.targetId,
+    appendedToExisting: true,
+    appendedKeys: filledKeys,
+  });
+  return { mode: 'append', employeeId: choice.targetId, filledKeys, skipped };
+}
+// INTAKE-APPROVE-END
+
+const intakeFieldLabels = {
+  jobType: '職能', store: '店舗', hireDate: '入社日', conversionPlannedType: '転換後の予定雇用形態',
+  trialPeriod: '試用期間', celebrationMoney: 'お祝い金', celebrationMoneyCondition: 'お祝い金の条件',
+  mentorName: 'メンター', birthDate: '生年月日', kotSchedulePattern: 'KOT勤務パターン', kotWorkDays: 'KOT勤務日数',
+  mobilePurchase: '携帯購入', musubiDevicePurchase: 'Musubi端末購入', musubiRegistration: 'Musubi登録',
+  uniformOrder: 'ユニフォーム注文', uniformType: 'ユニフォーム種別', businessCardOrder: '名刺注文', timesRegistration: 'Times登録',
+  jobCategory: '職種区分', workLocations: '就業場所', jobDutyContent: '業務内容', workHoursType: '勤務時間区分',
+  weeklyWorkHours: '週所定労働時間', breakTime: '休憩時間', referralType: '紹介区分', referrerName: '紹介者',
+  directApplyBonus: '直接応募手当', emailPersonal: '私用メール', personalEmail: '私用メール（連携用）',
+  careerUpDate: 'キャリアアップ日', note2: '備考2', intakeDocId: '入社受付ID',
+};
+let intakeDupeContext = null;
+
+function intakeApprovalDeps() {
+  return {
+    db,
+    serverTimestamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+    userEmail: currentUser.email,
+    employees,
+  };
+}
+
+function setIntakeDupeButtonsDisabled(disabled) {
+  ['btnIntakeDupeCancel', 'btnIntakeDupeNew', 'btnIntakeDupeAppend'].forEach(id => {
+    const button = document.getElementById(id);
+    if (button) button.disabled = disabled;
+  });
+}
+
+function openIntakeDupeModal(d, docId, duplicates) {
+  intakeDupeContext = { d, docId, duplicates };
+  const oneCandidate = duplicates.length === 1;
+  const candidates = duplicates.map(({ employee, reasons }, index) => `
+    <label style="display:block;border:1px solid #d1d5db;border-radius:8px;padding:12px;margin-top:10px;cursor:pointer;">
+      <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="radio" name="intakeDupeTarget" value="${esc(employee.id)}" ${oneCandidate && index === 0 ? 'checked' : ''} onchange="renderIntakeAppendPreview()">
+        <strong>${esc(employee.name || '氏名未設定')}</strong>
+        <span>${esc(employee.store || '店舗未設定')}</span>
+        <span style="color:${employee.status === '退職' ? '#b91c1c' : '#166534'};">${esc(employee.status || '状態未設定')}</span>
+        <span style="color:#6b7280;">一致: ${reasons.map(reason => reason === 'name' ? '氏名' : 'メール').join('・')}</span>
+      </span>
+    </label>`).join('');
+  document.getElementById('intakeDupeModalBody').innerHTML = `
+    <p>追記を選ぶと、その社員の空欄の項目だけ入社フォームの内容で埋めます。すでに入っている値は書き換えません。</p>
+    <div style="margin-top:14px;">${candidates}</div>
+    <div id="intakeAppendPreview" style="margin-top:16px;"></div>`;
+  setIntakeDupeButtonsDisabled(false);
+  document.getElementById('intakeDupeModal').classList.add('show');
+  renderIntakeAppendPreview();
+}
+
+function closeIntakeDupeModal() {
+  if (intakeBusy) return;
+  document.getElementById('intakeDupeModal').classList.remove('show');
+  intakeDupeContext = null;
+}
+
+function selectedIntakeDupe() {
+  if (!intakeDupeContext) return null;
+  const selected = document.querySelector('input[name="intakeDupeTarget"]:checked');
+  if (!selected) return null;
+  return intakeDupeContext.duplicates.find(item => item.employee.id === selected.value) || null;
+}
+
+function renderIntakeAppendPreview() {
+  const preview = document.getElementById('intakeAppendPreview');
+  if (!preview || !intakeDupeContext) return;
+  const selected = selectedIntakeDupe();
+  if (!selected) {
+    preview.innerHTML = '<p style="color:#b45309;">追記先の社員を選んでください。</p>';
+    return;
+  }
+  const built = buildEmployeeFromIntake(intakeDupeContext.d, intakeDupeContext.docId);
+  const result = computeAppendUpdates(selected.employee, built);
+  const label = key => intakeFieldLabels[key] || key;
+  const filled = result.filledKeys.length ? result.filledKeys.map(key => `<li>${esc(label(key))}</li>`).join('') : '<li>なし</li>';
+  const skipped = result.skipped.length ? result.skipped.map(item => `<li>${esc(label(item.key))}</li>`).join('') : '<li>なし</li>';
+  preview.innerHTML = `
+    <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;">
+      <strong>追記内容の確認</strong>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;">
+        <div><span style="color:#166534;font-weight:600;">空欄へ入れる項目</span><ul style="margin:6px 0 0;padding-left:20px;">${filled}</ul></div>
+        <div><span style="color:#6b7280;font-weight:600;">既存値があるので入れない項目</span><ul style="margin:6px 0 0;padding-left:20px;">${skipped}</ul></div>
+      </div>
+    </div>`;
+}
+
+async function finishNewIntakeApproval(d, docId) {
+  if (intakeBusy) return;
+  intakeBusy = true;
+  setIntakeDupeButtonsDisabled(true);
+  try {
+    await applyIntakeApproval(intakeApprovalDeps(), d, docId, { mode: 'new' });
+    document.getElementById('intakeDupeModal').classList.remove('show');
+    intakeDupeContext = null;
+    alert('社員登録しました。人事スレッドはES Botが数分以内に自動作成します。');
+    await loadEmployees();
+    await renderIntakeTab();
+  } catch (e) {
+    alert('登録に失敗しました: ' + e.message);
+  } finally {
+    intakeBusy = false;
+    setIntakeDupeButtonsDisabled(false);
+  }
+}
+
+async function approveIntakeAsNew() {
+  if (intakeBusy || !intakeDupeContext) return;
+  const { d, docId } = intakeDupeContext;
+  if ((!d.store || !d.hireDate) && !confirm('⚠️ 店舗/入社日が未入力です。このまま承認すると人事スレッドに店舗が表示されません。続行しますか？')) return;
+  if (!confirm(`${d.name} さんを別人として新規登録します。よろしいですか？\n（登録後、人事スレッドをES Botが数分以内に自動作成します）`)) return;
+  await finishNewIntakeApproval(d, docId);
+}
+
+async function approveIntakeAppend() {
+  if (intakeBusy || !intakeDupeContext) return;
+  const selected = selectedIntakeDupe();
+  if (!selected) return alert('追記先の社員を選んでください。');
+  const { d, docId } = intakeDupeContext;
+  intakeBusy = true;
+  setIntakeDupeButtonsDisabled(true);
+  try {
+    const result = await applyIntakeApproval(intakeApprovalDeps(), d, docId, { mode: 'append', targetId: selected.employee.id });
+    document.getElementById('intakeDupeModal').classList.remove('show');
+    intakeDupeContext = null;
+    alert(`既存の社員データへ追記しました（${result.filledKeys.length}項目）`);
+    await loadEmployees();
+    await renderIntakeTab();
+  } catch (e) {
+    alert('追記に失敗しました: ' + e.message);
+  } finally {
+    intakeBusy = false;
+    setIntakeDupeButtonsDisabled(false);
+  }
 }
 
 async function approveIntake(docId) {
@@ -1760,51 +2131,15 @@ async function approveIntake(docId) {
   if (!d) return alert('申請データが見つかりません。ページを再読み込みしてください。');
   if (!isIntakeCompleted(d)) return alert('⚠️ 店舗責任者の記入が完了していないため承認できません（記入待ち）。');
 
-  const dupe = findIntakeDuplicate(d);
-  if (dupe && !confirm(`⚠️ 同名または同メールの社員が既に登録されています（${dupe.name} / ${dupe.store || '店舗未設定'}）。\n重複登録になる可能性があります。それでも続行しますか？`)) return;
+  const duplicates = findIntakeDuplicates(d, employees);
+  if (duplicates.length > 0) {
+    openIntakeDupeModal(d, docId, duplicates);
+    return;
+  }
   // 店舗 or 入社日が未入力の場合は警告
   if ((!d.store || !d.hireDate) && !confirm(`⚠️ 店舗/入社日が未入力です。このまま承認すると人事スレッドに店舗が表示されません。続行しますか？`)) return;
   if (!confirm(`${d.name} さんを社員登録します。よろしいですか？\n（登録後、人事スレッドをES Botが数分以内に自動作成します）`)) return;
-
-  intakeBusy = true;
-  try {
-    const emp = {};
-    [
-      'name', 'kana', 'jobType', 'store', 'hireDate', 'conversionPlannedType', 'trialPeriod',
-      'celebrationMoney', 'celebrationMoneyCondition',
-      'mentorName', 'birthDate',
-      'kotSchedulePattern', 'kotWorkDays',
-      'mobilePurchase', 'musubiDevicePurchase', 'musubiRegistration',
-      'uniformOrder', 'uniformType', 'businessCardOrder', 'timesRegistration',
-      'jobCategory', 'workLocations', 'jobDutyContent', 'workHoursType', 'weeklyWorkHours', 'breakTime',
-      'referralType', 'referrerName', 'directApplyBonus',
-    ].forEach(k => { if (d[k]) emp[k] = d[k]; });
-    if (d.emailPersonal) { emp.emailPersonal = d.emailPersonal; emp.personalEmail = d.emailPersonal; } // ダッシュボードはemailPersonal・ES BotはpersonalEmailを参照するため両方書く
-    emp.position = (d.position && d.position !== 'なし') ? d.position : '';
-    if (d.careerUp === '有' && d.careerUpDate) emp.careerUpDate = d.careerUpDate;
-    if (d.note) emp.note2 = `【入社受付フォーム】${d.note}`;
-    emp.status = '在籍';
-    emp.hrThreadPending = true;   // ES Botがこのフラグを見て人事スレッドを自動作成する
-    emp.intakeDocId = docId;      // 出所トレース（どの申請から登録されたか）
-    emp.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-    emp.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    emp.updatedBy = currentUser.email;
-
-    const ref = await db.collection('employees').add(emp);
-    await db.collection('employeeIntake').doc(docId).update({
-      status: 'approved',
-      approvedBy: currentUser.email,
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      employeeId: ref.id,
-    });
-    alert('社員登録しました。人事スレッドはES Botが数分以内に自動作成します。');
-    await loadEmployees();
-    await renderIntakeTab();
-  } catch (e) {
-    alert('登録に失敗しました: ' + e.message);
-  } finally {
-    intakeBusy = false;
-  }
+  await finishNewIntakeApproval(d, docId);
 }
 
 async function rejectIntake(docId) {
