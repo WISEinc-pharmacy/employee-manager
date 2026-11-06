@@ -704,14 +704,82 @@ function sortEmployees(list) {
   });
 }
 
-// 正社員切替の表示（実測に基づき選定: conversionDate=既存の「正社員転換」リマインド節目日として
-// 全社員TYPES配列で使われている canonical フィールド・85%充足。conversionPlannedType=転換後の
-// 予定雇用形態・12%充足のため補足情報として併記。両方欠損時は「-」）
-function convSwitchText(e) {
+// CONVERSION-BEGIN
+const CONVERSION_TYPES = ['40時間正社員', '30時間正社員', '30時間時短社員', '業務委託'];
+
+function extractConversionDate(value) {
+  const text = value == null ? '' : String(value);
+  const patterns = [
+    /(\d{4})-(\d{1,2})-(\d{1,2})/,
+    /(\d{4})\/(\d{1,2})\/(\d{1,2})/,
+    /(\d{4})年(\d{1,2})月(\d{1,2})日/,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const utc = new Date(Date.UTC(year, month - 1, day));
+    if (utc.getUTCFullYear() !== year || utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) continue;
+    return {
+      date: `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      matchedText: match[0],
+    };
+  }
+  return { date: '', matchedText: '' };
+}
+
+function normalizeConversionType(value) {
+  const compact = (value == null ? '' : String(value))
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, '');
+  const aliases = {
+    '40時間正社員': '40時間正社員',
+    '40h正社員': '40時間正社員',
+    '30時間正社員': '30時間正社員',
+    '30h正社員': '30時間正社員',
+    '30時間時短社員': '30時間時短社員',
+    '30h時短社員': '30時間時短社員',
+    '業務委託': '業務委託',
+  };
+  return aliases[compact] || '';
+}
+
+function normalizeConversion(e) {
+  const source = e && typeof e === 'object' ? e : {};
+  const storedDate = source.conversionDate == null ? '' : String(source.conversionDate).trim();
+  const originalText = source.conversionPlannedType == null ? '' : String(source.conversionPlannedType);
+  const plannedText = originalText.trim() ? originalText : '';
+  const extracted = extractConversionDate(plannedText);
+  const candidate = (extracted.matchedText ? plannedText.replace(extracted.matchedText, '') : plannedText)
+    .replace(/(?:->|→|＞|>|～|〜|~|⇒|➡)+/g, ' ')
+    .replace(/[\s\u3000]+/g, '');
+  const type = normalizeConversionType(candidate);
+  return {
+    date: storedDate || extracted.date,
+    type,
+    legacyText: plannedText && !type && candidate ? originalText : '',
+  };
+}
+
+function formatConversion(e) {
+  const normalized = normalizeConversion(e);
+  if (normalized.legacyText) {
+    const legacyDate = extractConversionDate(normalized.legacyText).date;
+    if (legacyDate && legacyDate === normalized.date) return normalized.legacyText;
+  }
   const parts = [];
-  if (e.conversionDate) parts.push(esc(e.conversionDate));
-  if (e.conversionPlannedType) parts.push(esc(e.conversionPlannedType));
+  if (normalized.date) parts.push(normalized.date);
+  if (normalized.type) parts.push(normalized.type);
+  else if (normalized.legacyText) parts.push(normalized.legacyText);
   return parts.length ? parts.join(' → ') : '-';
+}
+// CONVERSION-END
+
+function convSwitchText(e) {
+  return esc(formatConversion(e));
 }
 
 function renderTable() {
@@ -1003,6 +1071,13 @@ function updateCertExpiryStatus(index) {
 function openModal(id) {
   editingId = id || null;
   const e = id ? employees.find(x => x.id === id) : {};
+  const conversion = normalizeConversion(e);
+  const conversionTypeOptions = CONVERSION_TYPES.map(type =>
+    `<option value="${esc(type)}" ${conversion.type === type ? 'selected' : ''}>${esc(type)}</option>`
+  ).join('');
+  const legacyConversionOption = conversion.legacyText
+    ? `<option value="${esc(conversion.legacyText)}" selected>（既存値）${esc(conversion.legacyText)}</option>`
+    : '';
   document.getElementById('empModalTitle').textContent = id ? '社員編集' : '社員追加';
   document.getElementById('btnDeleteEmp').style.display = id && userRole === 'admin' ? '' : 'none';
 
@@ -1047,7 +1122,6 @@ function openModal(id) {
     <div class="form-section">
       <h4>採用条件</h4>
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>転換後の予定雇用形態</label><input type="text" id="f_conversionPlannedType" value="${esc(e.conversionPlannedType)}" placeholder="例: 40時間正社員"></div>
         <div class="form-group" style="grid-column:span 2;"><label>試用期間</label><input type="text" id="f_trialPeriod" value="${esc(e.trialPeriod)}" placeholder="例: １２月１日　～　５月末（予定）"></div>
         <div class="form-group"><label>お祝い金の有無</label><select id="f_celebrationMoney"><option value="" ${!e.celebrationMoney?'selected':''}>-</option><option value="有" ${e.celebrationMoney==='有'?'selected':''}>有</option><option value="無" ${e.celebrationMoney==='無'?'selected':''}>無</option></select></div>
         <div class="form-group" style="grid-column:span 2;"><label>お祝い金の支給条件</label><input type="text" id="f_celebrationMoneyCondition" value="${esc(e.celebrationMoneyCondition)}"></div>
@@ -1057,7 +1131,8 @@ function openModal(id) {
     <div class="form-section">
       <h4>転換・リマインド</h4>
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>転換日</label><input type="date" id="f_conversionDate" value="${e.conversionDate || ''}"></div>
+        <div class="form-group"><label>切替日（正社員切替）</label><input type="date" id="f_conversionDate" value="${esc(conversion.date)}"></div>
+        <div class="form-group"><label>切替後の雇用形態</label><select id="f_conversionPlannedType"><option value="" ${!conversion.type && !conversion.legacyText ? 'selected' : ''}>-（未選択）</option>${conversionTypeOptions}${legacyConversionOption}</select></div>
         <div class="form-group"><label>転換確認日</label><input type="date" id="f_conversionCheckDate" value="${e.conversionCheckDate || ''}"></div>
         <div class="form-group"><label>キャリアアップ日</label><input type="date" id="f_careerUpDate" value="${e.careerUpDate || ''}"></div>
         <div class="form-group"><label>キャリアアップ確認日</label><input type="date" id="f_careerUpCheckDate" value="${e.careerUpCheckDate || ''}"></div>
@@ -2351,7 +2426,7 @@ function exportCSV() {
     '労働通知書期限','労働通知書作成','中退共','共済者番号',
     '薬剤師免許証番号','薬剤師免許登録年月','保険薬剤師登録番号','保険薬剤師登録年月','免許証有効期限',
     'DriveURL','タイムズ','KOT','ムスビ','チケットレストラン','店舗キー','名刺','携帯(貸与)','印鑑','マイナンバー','備考','備考2',
-    'Slack ID','KOT番号','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','会社メール','個人メール','口座情報','雇用保険番号','雇用保険取得日'];
+    'Slack ID','KOT番号','退職日','郵便番号','住所','生年月日','携帯番号','勤務時間','会社メール','個人メール','口座情報','雇用保険番号','雇用保険取得日','正社員切替'];
   const fields = ['name','kana','store','jobType','employmentType','position','hireDate','status',
     'conversionDate','conversionCheckDate','careerUpDate','careerUpCheckDate','pharmacist2yDate','pharmacist2yCheckDate',
     'dueDate','maternityStart','maternityEnd','maternityReturn','childcareStart','childcareEnd','childcareReturn',
@@ -2363,7 +2438,9 @@ function exportCSV() {
 
   let csv = '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
   for (const e of employees) {
-    csv += fields.map(f => `"${(e[f] || '').replace(/"/g, '""')}"`).join(',') + '\n';
+    const conversionText = formatConversion(e);
+    const values = fields.map(f => e[f] || '').concat(conversionText === '-' ? '' : conversionText);
+    csv += values.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',') + '\n';
   }
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
